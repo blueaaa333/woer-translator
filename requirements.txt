@@ -1,4 +1,6 @@
 opencc-python-reimplemented==0.1.7
+pyobjc-core==11.1; sys_platform == 'darwin'
+pyobjc-framework-CoreText==11.1; sys_platform == 'darwin'
 pyobjc-framework-Cocoa==11.1; sys_platform == 'darwin'
 pyobjc-framework-Quartz==11.1; sys_platform == 'darwin'
 pyobjc-framework-ApplicationServices==11.1; sys_platform == 'darwin'
