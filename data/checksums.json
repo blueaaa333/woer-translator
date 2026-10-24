@@ -1,0 +1,20 @@
+[
+  {
+    "archive": "words.db.gz",
+    "target": "words.db",
+    "sha256": "0f56ac00b0720f5a78105c0d25404f8f258d5f8fa4208b9ae0e893aea8c4a6cb",
+    "unpacked_sha256": "5cc7ccf7cd2501a0928c107494058d6fdd99be95fe88ca0f01b9622f465ed771"
+  },
+  {
+    "archive": "extended.db.gz",
+    "target": "extended.db",
+    "sha256": "8522a219b432d3a1e1769020d7f6a660fa6b232f15d06146698d2c08f7b2dcd7",
+    "unpacked_sha256": "a0254a63dfa32046c6aa82ba9aefd73aeda79f29f6208c99d99128c360a77bf9"
+  },
+  {
+    "archive": "community.db.gz",
+    "target": "community.db",
+    "sha256": "a962c15aac0e0c1225d4a2ed32556fb723ad98d21d95ae3e0548c153acb62937",
+    "unpacked_sha256": "879ef2b46ed8f38611824619f7279af3cf80291b09b52446e24aaaf74158518d"
+  }
+]

@@ -1,0 +1,19 @@
+{
+  "well-researched": {
+    "translation": "adj. 经过充分研究的；调查深入的；有扎实资料依据的",
+    "definition": "Based on careful investigation and a thorough study of relevant information.",
+    "note": "常修饰 report、article、book、argument 等；强调研究或资料准备充分，不等于结论一定正确。作表语时也常写作 well researched。",
+    "examples": [["报告、文章：调查深入的", "She submitted a well-researched report on urban transport.", "她提交了一份对城市交通进行深入调查的报告。"], ["论点：有充分研究依据的", "His argument was well researched, but the evidence was still open to debate.", "他的论点有充分的研究依据，但证据仍有讨论的余地。"], ["选题：已得到充分研究的", "This is a well-researched topic, so we need a more specific question.", "这个选题已经得到充分研究，因此我们需要提出一个更具体的问题。"]]
+  },
+  "well-supported": {"translation": "adj. 有充分证据支持的；得到有力支持的", "definition": "Backed by strong evidence or by substantial practical support.", "examples": [["证据支持", "The conclusion is well-supported by the survey results.", "调查结果为这一结论提供了充分支持。"], ["实际支持", "The project is well-supported by local volunteers.", "这个项目得到了当地志愿者的大力支持。"]]},
+  "well-documented": {"translation": "adj. 有充分记录的；有翔实资料佐证的", "definition": "Recorded in detail or supported by abundant written evidence.", "examples": [["有记录", "The region has a well-documented history of flooding.", "这个地区的洪水历史有详尽的记录。"], ["软件文档完善", "A well-documented tool is easier for new users to learn.", "文档完善的工具更方便新用户学习。"]]},
+  "well-designed": {"translation": "adj. 设计精良的；规划周密的", "definition": "Planned carefully so that its form or operation serves its purpose effectively.", "examples": [["设计精良", "A well-designed interface makes common tasks easy.", "设计精良的界面让常用操作变得简单。"]]},
+  "well-organized": {"translation": "adj. 组织有序的；安排妥当的；有条理的", "definition": "Arranged or managed in a clear and efficient way.", "examples": [["有条理", "Her notes are clear and well-organized.", "她的笔记清楚而有条理。"]]},
+  "well-informed": {"translation": "adj. 消息灵通的；掌握充分信息的；有见识的", "definition": "Having reliable knowledge about a subject or current events.", "examples": [["信息充分", "Read both reports before making a well-informed decision.", "在作出有充分依据的决定前，先读一读两份报告。"]]},
+  "evidence-based": {"translation": "adj. 以证据为基础的；循证的", "definition": "Guided by relevant evidence rather than only by assumption or personal belief.", "examples": [["以证据为依据", "The team proposed an evidence-based approach to training.", "团队提出了一种以证据为依据的培训方法。"]]},
+  "research-based": {"translation": "adj. 以研究为基础的；有研究依据的", "definition": "Developed from or supported by research findings.", "examples": [["有研究依据", "The guide offers research-based advice for language learners.", "这份指南为语言学习者提供有研究依据的建议。"]]},
+  "context-dependent": {"translation": "adj. 依赖语境的；取决于具体情境的", "definition": "Changing according to the surrounding language or the circumstances in which something occurs.", "examples": [["取决于语境", "The meaning of this expression is context-dependent.", "这个表达的含义取决于语境。"]]},
+  "time-consuming": {"translation": "adj. 耗时的；需要花费大量时间的", "definition": "Requiring a substantial amount of time to complete.", "examples": [["耗时", "Checking every entry manually is time-consuming.", "逐条人工核查很耗时间。"]]},
+  "data-driven": {"translation": "adj. 由数据驱动的；以数据为决策依据的", "definition": "Directed by the analysis and interpretation of data.", "examples": [["以数据为依据", "We need a data-driven plan for improving the service.", "我们需要一个以数据为依据的服务改进计划。"]]},
+  "well-calibrated": {"translation": "adj. 校准良好的；调校准确的", "definition": "Adjusted carefully so that measurements or responses match the intended standard.", "examples": [["仪器校准", "Use a well-calibrated scale for this measurement.", "这次测量要使用校准良好的秤。"]]}
+}

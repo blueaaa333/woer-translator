@@ -1,0 +1,14 @@
+{
+  "date": "2026-10-24",
+  "tracked_files": 69,
+  "tracked_bytes": 29784526,
+  "secret_scan_findings": 0,
+  "personal_path_findings": 0,
+  "forbidden_artifacts": 0,
+  "python_syntax": "passed",
+  "data_and_function_tests": 6,
+  "native_lifecycle_checks": 14,
+  "native_normalization_checks": 7,
+  "publish_status": "Source release prepared for publication; see GitHub commit history for publication status.",
+  "repository_url": "https://github.com/blueaaa333/woer-translator"
+}

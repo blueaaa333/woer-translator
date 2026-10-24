@@ -1,0 +1,6 @@
+Lucide: languages icon
+https://lucide.dev/icons/languages
+https://github.com/lucide-icons/lucide/blob/main/icons/languages.svg
+ISC License, see Lucide-LICENSE.txt.
+Modifications: Nordic blue-grey palette, rounded background and PNG/ICO rendering.
+Not an exclusive logo or a claim of trademark clearance.
