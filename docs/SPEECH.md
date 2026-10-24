@@ -1,8 +1,14 @@
-# 可选离线英美语音
+# 本地英美语音
+
+## macOS
+
+Mac 版使用系统自带 `/usr/bin/say` 和 `/usr/bin/afplay`，按语言区域选择 `en_GB` 与 `en_US` 声音，不分发 Apple 语音资源。缺少某口音时，会提示在系统设置的辅助功能朗读声音中下载，不会用另一个口音冒充。系统设置中的具体名称会随 macOS 版本变化。声音与 AIFF/WAV 缓存均在本机处理。
+
+## Windows
 
 英式使用 `en_GB-cori-medium`，美式使用 `en_US-ljspeech-medium`；两个按钮调用不同模型。它们是本机合成语音，不能保证所有专名、多音词或上下文中的重音都准确。
 
-本源码包不附带 Piper 二进制、eSpeak NG、ONNX Runtime 或模型权重。用户选择执行 `python scripts/setup_speech.py` 后，脚本才直接从上游下载，并核对固定 SHA-256。模型采用固定 Hugging Face 提交，运行时固定 Piper 2023.11.14-2 发布文件，具体见 `scripts/speech-downloads.json`。
+源码和桌面安装包不附带 Piper 二进制、eSpeak NG、ONNX Runtime 或模型权重。用户在软件菜单选择“下载英美离线语音”或执行 `python scripts/setup_speech.py` 后，才直接从上游下载，并核对固定 SHA-256。模型采用固定 Hugging Face 提交，运行时固定 Piper 2023.11.14-2 发布文件，具体见 `scripts/speech-downloads.json`。安装包下载到本机用户数据目录，源码脚本默认下载到源码目录。
 
 - [Piper 发布](https://github.com/rhasspy/piper/releases/tag/2023.11.14-2)
 - [Piper 源码与 MIT 许可](https://github.com/rhasspy/piper/tree/2023.11.14-2)
@@ -15,4 +21,4 @@
 
 Piper 的开源许可不等于整套第三方依赖都采用 MIT。eSpeak NG 属于 GPL 组件；若未来分发含这些运行组件的安装包，需要针对实际二进制版本提供对应源码、必要构建信息及完整第三方声明。当前核查无法从历史构建的浮动依赖精确追溯全部二进制对应源码，因此本次不重新分发这些运行包。
 
-只在用户主动执行安装命令时下载。应用默认不自动朗读；可在“···”开启。缓存、首次加载和 90 秒闲置释放行为不会联网。
+只在用户主动选择下载时联网。应用默认不自动朗读；可在“···”开启。缓存、首次加载和 90 秒闲置释放行为不会联网。

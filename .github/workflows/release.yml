@@ -1,0 +1,90 @@
+name: Build desktop release
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            label: Windows-x64
+          - os: macos-15
+            label: macOS-arm64
+          - os: macos-15-intel
+            label: macOS-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-build.txt
+      - run: python scripts/prepare_data.py
+      - run: python -m unittest discover -s tests -p "test_*.py"
+      - if: runner.os == 'Windows'
+        shell: powershell
+        run: .\tests\run_native.ps1
+      - run: python scripts/build_release.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: installer-${{ matrix.label }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: installer-*
+          path: release-assets
+          merge-multiple: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          registry-url: https://npm.pkg.github.com
+          scope: '@blueaaa333'
+      - name: Test and pack launcher
+        working-directory: packages/launcher
+        run: |
+          npm test
+          npm pack --pack-destination ../../release-assets
+      - name: Publish desktop installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION=$(tr -d '\r\n' < VERSION)
+          test "$(node -p "require('./packages/launcher/package.json').version")" = "$VERSION"
+          (cd release-assets && sha256sum * > SHA256SUMS.txt)
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release upload "v$VERSION" release-assets/* --clobber
+          else
+            gh release create "v$VERSION" release-assets/* --target "$GITHUB_SHA" --title "沃尔翻译官 v$VERSION · Windows & macOS" --notes-file docs/RELEASE_NOTES.md
+          fi
+      - name: Publish GitHub Package
+        working-directory: packages/launcher
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "@blueaaa333/woer-translator@$VERSION" version --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
+            echo "Package version already exists"
+          else
+            npm publish --registry=https://npm.pkg.github.com
+          fi

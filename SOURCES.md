@@ -38,11 +38,12 @@ python scripts/prepare_data.py
 
 ## Code dependencies and artwork
 
-- OpenCC Python 0.1.7: [PyPI](https://pypi.org/project/opencc-python-reimplemented/0.1.7/), [source](https://github.com/yichen0831/opencc-python), [OpenCC data source](https://github.com/BYVoid/OpenCC). Apache-2.0; license and NOTICE retained, package installed separately.
+- OpenCC Python 0.1.7: [PyPI](https://pypi.org/project/opencc-python-reimplemented/0.1.7/), [source](https://github.com/yichen0831/opencc-python), [OpenCC data source](https://github.com/BYVoid/OpenCC). Apache-2.0; license and NOTICE retained; bundled in desktop installers.
+- Binary runtime: [CPython](https://github.com/python/cpython), [Tcl/Tk](https://github.com/tcltk), [PyObjC](https://github.com/ronaldoussoren/pyobjc), [PyInstaller](https://github.com/pyinstaller/pyinstaller). Build scripts collect exact installed license texts into `licenses/runtime` and record versions in `build-info.json`. PyInstaller's bootloader exception is retained. The app does not redistribute Apple system voices.
 - App icon: [Lucide languages](https://lucide.dev/icons/languages), [original SVG](https://github.com/lucide-icons/lucide/blob/main/icons/languages.svg). ISC; adapted palette, rounded background and rasterization. Full notice in `assets/Lucide-LICENSE.txt`.
 - Optional speech: pinned upstream downloads in `scripts/speech-downloads.json`; model cards and upstream terms in `licenses/`; details in `docs/SPEECH.md`. No speech binary or model weights are included.
 - Promotional poster: generated for this project with the built-in image generation tool, using the licensed app icon. Prompt and provenance in `docs/PROMO.md`. The displayed interface is illustrative.
 
 ## Not included
 
-ECDICT, exam PDFs, PDF-derived entries, legacy private API integrations, browser screenshots containing third-party documents, personal vocabulary lists, settings, logs, audio caches, credentials and third-party binary distributions are absent from this source release. Their absence is intentional and does not modify the user's separate local installation.
+ECDICT, exam PDFs, PDF-derived entries, legacy private API integrations, browser screenshots containing third-party documents, personal vocabulary lists, settings, logs, audio caches, credentials, Piper runtime binaries and voice weights are absent. Desktop installers contain only the separately documented runtime dependencies, not the user's existing installation folder.

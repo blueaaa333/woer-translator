@@ -2,6 +2,8 @@
 /speech/
 /build/
 /dist/
+/release-assets/
+*.spec
 /_internal/
 *.exe
 *.dll

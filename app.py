@@ -1,30 +1,42 @@
 import tkinter as tk
-import winsound
 from tkinter import ttk
 import ctypes as C,sqlite3,sys,os,re,threading,time,queue,urllib.request,urllib.parse,hashlib,json,subprocess,atexit,base64,traceback
 from pathlib import Path
 from lexicon import Lexicon,definition_text,definition_sections,word_form_note,examples_text,normalize_pos,normalize_query,valid_query
 from chinese_text import simplified
-from pronunciation import SpeechEngine,phonetic_labels
+from pronunciation import SpeechEngine,phonetic_labels,SpeechUnavailable
 from word_forms import form_rows
 
-BASE=Path(sys.executable).parent if getattr(sys,'frozen',False) else Path(__file__).parent
-DATA=Path(os.environ.get('LOCALAPPDATA',str(BASE)))/'QingCi'; DATA.mkdir(parents=True,exist_ok=True)
+from app_paths import resource_root,user_data_dir
+IS_WINDOWS=sys.platform=='win32'
+if IS_WINDOWS:
+ import winsound
+else:
+ import mac_platform as mac
+ winsound=mac.sound
+BASE=resource_root();DATA=user_data_dir();DATA.mkdir(parents=True,exist_ok=True)
+UI_FONT='Microsoft YaHei UI' if IS_WINDOWS else 'PingFang SC'
+LATIN_FONT='Segoe UI' if IS_WINDOWS else 'Helvetica Neue'
 def write_error(kind,exc,value,tb):
  try:
   with (DATA/'application-errors.log').open('a',encoding='utf-8') as f:
    f.write('\n'+time.strftime('%Y-%m-%d %H:%M:%S')+' '+kind+'\n');traceback.print_exception(exc,value,tb,file=f)
  except OSError:pass
-u=C.windll.user32
-# Set awareness BEFORE Tk creates a window: never let Windows bitmap-stretch text.
-try:u.SetProcessDpiAwarenessContext(C.c_void_p(-4))
-except (AttributeError,OSError):
- try:C.windll.shcore.SetProcessDpiAwareness(2)
- except (AttributeError,OSError):u.SetProcessDPIAware()
-u.GetClipboardData.restype=C.c_void_p
-k=C.windll.kernel32;k.GlobalLock.argtypes=[C.c_void_p];k.GlobalLock.restype=C.c_void_p;k.GlobalUnlock.argtypes=[C.c_void_p]
+if IS_WINDOWS:
+ u=C.windll.user32
+ # Set awareness BEFORE Tk creates a window: never let Windows bitmap-stretch text.
+ try:u.SetProcessDpiAwarenessContext(C.c_void_p(-4))
+ except (AttributeError,OSError):
+  try:C.windll.shcore.SetProcessDpiAwareness(2)
+  except (AttributeError,OSError):u.SetProcessDPIAware()
+ u.GetClipboardData.restype=C.c_void_p
+ k=C.windll.kernel32;k.GlobalLock.argtypes=[C.c_void_p];k.GlobalLock.restype=C.c_void_p;k.GlobalUnlock.argtypes=[C.c_void_p]
+else:u=k=None
+def clipboard_sequence():return u.GetClipboardSequenceNumber() if IS_WINDOWS else mac.clipboard_sequence()
+
 events=queue.Queue()
 def clipboard():
+ if not IS_WINDOWS:return mac.clipboard_text()
  if not u.OpenClipboard(None): return ''
  try:
   h=u.GetClipboardData(13)
@@ -37,6 +49,7 @@ def clipboard():
   finally:k.GlobalUnlock(h)
  finally:u.CloseClipboard()
 def hotkeys():
+ if not IS_WINDOWS:return
  # Register in this thread because Windows delivers hotkey messages to its queue.
  if not u.RegisterHotKey(None,1,0x4000|0x2|0x4,0x44):events.put(('status','快捷键被占用：请使用复制弹窗或手动输入'))
  from ctypes import wintypes
@@ -62,6 +75,7 @@ def start_bridge(args,**kwargs):
  return proc
 def stop_children():
  bridge_stop.set()
+ if not IS_WINDOWS:mac.stop_monitor()
  with managed_lock:procs=list(managed)
  for proc in procs:
   if proc.poll() is None:
@@ -89,6 +103,8 @@ def source_process(pid):
   return Path(buf.value).stem.lower() if k.QueryFullProcessImageNameW(handle,0,buf,C.byref(length)) else ''
  finally:k.CloseHandle(handle)
 def selection_monitor():
+ if not IS_WINDOWS:
+  mac.monitor(events,selection_enabled,bridge_stop);return
  # Browser PDF accessibility ranges may point to unrelated text on the page.
  # Only observe gestures here. Read text via a fresh copy after an explicit click.
  watch=None
@@ -120,22 +136,26 @@ def selection_monitor():
     forget(proc)
 class App:
  def __init__(self,testing=False):
-  self.lexicon=Lexicon(BASE);self.db=self.lexicon.db;self.result=None;self.online=None;self.use_online=False;self.word='';self.seq=u.GetClipboardSequenceNumber();self.popup=None;self.testing=testing
-  self.speech=SpeechEngine(BASE,DATA/'speech-cache')
+  self.lexicon=Lexicon(BASE);self.db=self.lexicon.db;self.result=None;self.online=None;self.use_online=False;self.word='';self.seq=clipboard_sequence();self.popup=None;self.testing=testing
+  self.speech=SpeechEngine(BASE,DATA/'speech-cache',user_root=DATA/'speech')
   self.preferences=self.read_preferences();self.settings_popup=None
   self.preferred_accent=self.preferences.get('preferred_accent',2)
   self.audio_serial=0;self.audio_lock=threading.Lock();self.accent=self.preferences.get('accent',0);self.last_prompt='';self.last_prompt_time=0;self.pending_source=None;self.clipboard_suppress_until=0;self.selection_version=0
-  self.root=tk.Tk();self.root.title('沃尔翻译官');self.dpi=u.GetDpiForSystem() if hasattr(u,'GetDpiForSystem') else 96;self.scale=self.dpi/96;self.root.tk.call('tk','scaling',self.dpi/72);self.root.geometry(f'{round(380*self.scale)}x{round(420*self.scale)}');self.root.configure(bg='#dce7fb');self.root.overrideredirect(True);self.root.attributes('-topmost',True)
-  self.root.option_add('*Font',('Microsoft YaHei UI',10))
+  self.root=tk.Tk();self.root.title('沃尔翻译官');self.dpi=u.GetDpiForSystem() if IS_WINDOWS and hasattr(u,'GetDpiForSystem') else 96;self.scale=self.dpi/96;
+  if IS_WINDOWS:self.root.tk.call('tk','scaling',self.dpi/72)
+  self.root.geometry(f'{round(380*self.scale)}x{round(420*self.scale)}');self.root.configure(bg='#dce7fb');self.root.overrideredirect(True);self.root.attributes('-topmost',True)
+  self.root.option_add('*Font',(UI_FONT,10))
   self.root.report_callback_exception=self.on_error
   sizes=[16,18,20,24,27,30,32,36,40,48,64];size=min(sizes,key=lambda n:abs(n-18*self.scale))
   self.brand_icon=tk.PhotoImage(file=str(BASE/'assets'/f'brand-{size}.png'))
-  self.root.iconbitmap(str(BASE/'assets'/'沃尔翻译官.ico'))
+  if IS_WINDOWS:self.root.iconbitmap(str(BASE/'assets'/'沃尔翻译官.ico'))
+  else:
+   self.root.iconphoto(True,self.brand_icon);self.root.createcommand('tk::mac::Quit',self.root.destroy)
   self.root.bind('<Escape>',lambda e:self.hide())
   f=tk.Frame(self.root,bg='white',padx=16,pady=9);f.pack(fill='both',expand=True,padx=1,pady=1)
   head=tk.Frame(f,bg='white');head.pack(fill='x',pady=(0,5))
   self.button(head,'×',self.hide,small=True).pack(side='left')
-  tk.Label(head,text='英文  ⇄  中文',bg='white',fg='#5b6d78',font=('Microsoft YaHei UI',10)).pack(side='left',expand=True)
+  tk.Label(head,text='英文  ⇄  中文',bg='white',fg='#5b6d78',font=(UI_FONT,10)).pack(side='left',expand=True)
   self.menu_button=self.button(head,'···',self.menu,small=True);self.menu_button.pack(side='right')
   self.root.bind('<Configure>',self.follow_settings)
   for target in [head]:
@@ -146,16 +166,16 @@ class App:
   self.card_inner=tk.Frame(self.card,bg='#d5f4fc')
   self.card_window=self.card.create_window(round(18*self.scale),round(7*self.scale),anchor='nw',window=self.card_inner)
   row=tk.Frame(self.card_inner,bg='#d5f4fc');row.pack(fill='x',pady=(0,1))
-  self.entry=tk.Entry(row,bd=0,highlightthickness=0,bg='#d5f4fc',fg='#102e3b',font=('Segoe UI',19,'bold'),width=10,insertbackground='#17a7c6')
+  self.entry=tk.Entry(row,bd=0,highlightthickness=0,bg='#d5f4fc',fg='#102e3b',font=(LATIN_FONT,19,'bold'),width=10,insertbackground='#17a7c6')
   self.entry.pack(side='left',fill='x',expand=True);self.entry.insert(0,'选词即可查');self.entry.bind('<Return>',lambda e:self.lookup(self.entry.get()))
   search=self.button(row,'⌕',lambda:self.lookup(self.entry.get()),small=True);search.config(bg='#d5f4fc');search.pack(side='right')
   pronunciations=tk.Frame(self.card_inner,bg='#d5f4fc');pronunciations.pack(fill='x')
   pronunciations.columnconfigure(0,weight=1,uniform='accent');pronunciations.columnconfigure(1,weight=1,uniform='accent')
   self.uk=self.pronunciation(pronunciations,'英',1);self.us=self.pronunciation(pronunciations,'美',2)
   self.uk.config(text='');self.us.config(text='')
-  self.meta=tk.Label(f,text='',bg='white',fg='#87959e',font=('Microsoft YaHei UI',9))
+  self.meta=tk.Label(f,text='',bg='white',fg='#87959e',font=(UI_FONT,9))
   nav=tk.Frame(f,bg='white');nav.pack(fill='x',pady=(6,0))
-  favorite=self.button(nav,'♡ 收藏',self.save,small=True);favorite.config(font=('Microsoft YaHei UI',9));favorite.pack(side='right')
+  favorite=self.button(nav,'♡ 收藏',self.save,small=True);favorite.config(font=(UI_FONT,9));favorite.pack(side='right')
   self.active_tab='definition';self.nav={};self.details_expanded=False
   for key,label in [('definition','释义'),('examples','例句'),('forms','词形')]:
    b=self.button(nav,label,lambda k=key:self.select_tab(k),small=True);b.pack(side='left',padx=(0,18),pady=(2,4));self.nav[key]=b
@@ -163,22 +183,22 @@ class App:
   area=tk.Frame(f,bg='white');area.pack(fill='both',expand=True,pady=(3,4))
   style=ttk.Style();style.theme_use('clam');style.configure('Vertical.TScrollbar',troughcolor='white',background='#dceaf0',bordercolor='white',arrowcolor='#8da7b2',width=9)
   scroll=ttk.Scrollbar(area,orient='vertical');scroll.pack(side='right',fill='y')
-  self.text=tk.Text(area,wrap='word',width=1,height=7,bg='white',fg='#243e4a',relief='flat',bd=0,padx=2,pady=6,spacing3=3,font=('Microsoft YaHei UI',12),yscrollcommand=scroll.set)
+  self.text=tk.Text(area,wrap='word',width=1,height=7,bg='white',fg='#243e4a',relief='flat',bd=0,padx=2,pady=6,spacing3=3,font=(UI_FONT,12),yscrollcommand=scroll.set)
   self.text.pack(fill='both',expand=True);scroll.config(command=self.text.yview)
-  self.text.tag_configure('pos',foreground='#82949c',font=('Segoe UI',12,'italic'))
-  self.text.tag_configure('heading',foreground='#168fae',font=('Microsoft YaHei UI',10,'bold'),spacing1=6,spacing3=4)
+  self.text.tag_configure('pos',foreground='#82949c',font=(LATIN_FONT,12,'italic'))
+  self.text.tag_configure('heading',foreground='#168fae',font=(UI_FONT,10,'bold'),spacing1=6,spacing3=4)
   self.text.tag_configure('example',foreground='#3b7189')
-  self.text.tag_configure('meaning',foreground='#203b49',font=('Microsoft YaHei UI',12),spacing1=1,spacing3=6)
-  self.text.tag_configure('label',foreground='#697e8a',font=('Microsoft YaHei UI',9,'bold'),spacing1=5,spacing3=3)
-  self.text.tag_configure('note',foreground='#738895',font=('Microsoft YaHei UI',9),spacing1=2,spacing3=5)
-  self.text.tag_configure('english',foreground='#536d7b',font=('Microsoft YaHei UI',10),spacing1=2,spacing3=5)
-  self.text.tag_configure('source',foreground='#8a9aa5',font=('Microsoft YaHei UI',9),spacing1=7,spacing3=4)
-  self.text.tag_configure('form_heading',foreground='#244859',font=('Microsoft YaHei UI',11,'bold'),spacing1=7,spacing3=3)
-  self.text.tag_configure('form_meaning',foreground='#3b5360',font=('Microsoft YaHei UI',10),spacing3=3)
-  self.more=self.button(f,'补充释义与来源  ▾',self.toggle_details,small=True);self.more.config(font=('Microsoft YaHei UI',9),fg='#718b9b')
+  self.text.tag_configure('meaning',foreground='#203b49',font=(UI_FONT,12),spacing1=1,spacing3=6)
+  self.text.tag_configure('label',foreground='#697e8a',font=(UI_FONT,9,'bold'),spacing1=5,spacing3=3)
+  self.text.tag_configure('note',foreground='#738895',font=(UI_FONT,9),spacing1=2,spacing3=5)
+  self.text.tag_configure('english',foreground='#536d7b',font=(UI_FONT,10),spacing1=2,spacing3=5)
+  self.text.tag_configure('source',foreground='#8a9aa5',font=(UI_FONT,9),spacing1=7,spacing3=4)
+  self.text.tag_configure('form_heading',foreground='#244859',font=(UI_FONT,11,'bold'),spacing1=7,spacing3=3)
+  self.text.tag_configure('form_meaning',foreground='#3b5360',font=(UI_FONT,10),spacing3=3)
+  self.more=self.button(f,'补充释义与来源  ▾',self.toggle_details,small=True);self.more.config(font=(UI_FONT,9),fg='#718b9b')
   bottom=self.bottom=tk.Frame(f,bg='white');bottom.pack(fill='x')
-  self.status=tk.Label(bottom,text='选中单词后，点击查词',bg='white',fg='#6c8692',font=('Microsoft YaHei UI',8),anchor='w',width=30);self.status.pack(side='left',fill='x',expand=True)
-  source_button=self.button(bottom,'来源 ↗',self.source_link,small=True);source_button.config(font=('Microsoft YaHei UI',9),fg='#8599a5');source_button.pack(side='right')
+  self.status=tk.Label(bottom,text='选中单词后，点击查词',bg='white',fg='#6c8692',font=(UI_FONT,8),anchor='w',width=30);self.status.pack(side='left',fill='x',expand=True)
+  source_button=self.button(bottom,'来源 ↗',self.source_link,small=True);source_button.config(font=(UI_FONT,9),fg='#8599a5');source_button.pack(side='right')
   self.settext('选中英文，点击「查词」。\n\n完整离线释义，不调用第三方私有接口。')
   self.select_tab('definition')
   self.selection=tk.BooleanVar(value=self.preferences.get('selection',True));self.auto=tk.BooleanVar(value=self.preferences.get('copy_prompt',True))
@@ -215,15 +235,15 @@ class App:
   icon.create_polygon(*[v*sc for v in [2,8,6,8,11,4,11,17,6,13,2,13]],fill='',outline='#19adc9',width=2*sc)
   icon.create_arc(5*sc,3*sc,18*sc,18*sc,start=-55,extent=110,style='arc',outline='#19adc9',width=1.5*sc)
   icon.bind('<Button-1>',lambda e:self.speak(accent))
-  tk.Label(row,text=label,bg='#d5f4fc',fg='#376476',font=('Microsoft YaHei UI',9)).pack(side='left',padx=(0,7))
-  phon=tk.Label(row,text='',bg='#d5f4fc',fg='#5a8294',anchor='w',font=('Segoe UI',9),wraplength=round(121*self.scale),cursor='hand2');phon.pack(side='left',fill='x',expand=True);phon.bind('<Button-1>',lambda e:self.speak(accent))
+  tk.Label(row,text=label,bg='#d5f4fc',fg='#376476',font=(UI_FONT,9)).pack(side='left',padx=(0,7))
+  phon=tk.Label(row,text='',bg='#d5f4fc',fg='#5a8294',anchor='w',font=(LATIN_FONT,9),wraplength=round(121*self.scale),cursor='hand2');phon.pack(side='left',fill='x',expand=True);phon.bind('<Button-1>',lambda e:self.speak(accent))
   return phon
  def source_link(self):
   import webbrowser
   webbrowser.open(self.result['community'][0]['url'] if self.result and self.result.get('community') else 'https://kaikki.org/dictionary/English/')
  def select_tab(self,key):
   self.active_tab=key
-  for k,b in self.nav.items():b.config(fg='#119dbb' if k==key else '#637681',font=('Microsoft YaHei UI',12,'bold' if k==key else 'normal'))
+  for k,b in self.nav.items():b.config(fg='#119dbb' if k==key else '#637681',font=(UI_FONT,12,'bold' if k==key else 'normal'))
   if self.result:self.render()
  def render(self):
   self.more.pack_forget()
@@ -262,7 +282,7 @@ class App:
    self.more.pack(before=self.bottom,anchor='w',pady=(1,3))
   else:self.more.pack_forget()
  def button(self,parent,label,command,small=False):
-  b=tk.Button(parent,text=label,command=command,bg='white' if small else '#eafaff',fg='#536783' if small else '#149fbc',activebackground='#e4eeff',activeforeground='#2463db',relief='flat',bd=0,padx=4 if small else 8,pady=1 if small else 4,cursor='hand2',font=('Microsoft YaHei UI',10))
+  b=tk.Button(parent,text=label,command=command,bg='white' if small else '#eafaff',fg='#536783' if small else '#149fbc',activebackground='#e4eeff',activeforeground='#2463db',relief='flat',bd=0,padx=4 if small else 8,pady=1 if small else 4,cursor='hand2',font=(UI_FONT,10))
   b.bind('<Enter>',lambda e:b.config(bg='#eaf2ff'));b.bind('<Leave>',lambda e:b.config(bg='white' if small else '#eafaff'))
   return b
  def hide(self):
@@ -293,6 +313,7 @@ class App:
    record_stage('clear_ignored_stale',reason=detail['reason'],id=self.pending_source['id']);return
   self.close_floating(detail['reason'] if detail else 'explicit')
  def round_window(self,win,radius=13):
+  if not IS_WINDOWS:return
   win.update_idletasks();hwnd=u.GetParent(win.winfo_id())
   gdi=C.windll.gdi32
   gdi.CreateRoundRectRgn.argtypes=[C.c_int]*6;gdi.CreateRoundRectRgn.restype=C.c_void_p
@@ -305,14 +326,14 @@ class App:
   f=tk.Frame(m,bg='white',padx=round(14*self.scale),pady=round(12*self.scale));f.pack(fill='both',expand=True,padx=1,pady=1)
   head=tk.Frame(f,bg='white');head.pack(fill='x',pady=(0,7))
   tk.Label(head,image=self.brand_icon,bg='white').pack(side='left',padx=(0,7))
-  tk.Label(head,text='沃尔翻译官',bg='white',fg='#23475b',font=('Microsoft YaHei UI',11,'bold')).pack(side='left')
+  tk.Label(head,text='沃尔翻译官',bg='white',fg='#23475b',font=(UI_FONT,11,'bold')).pack(side='left')
   self.button(head,'×',m.destroy,small=True).pack(side='right')
-  def section(text):tk.Label(f,text=text,bg='white',fg='#8a9aa6',font=('Microsoft YaHei UI',9),anchor='w').pack(fill='x',pady=(9,5))
+  def section(text):tk.Label(f,text=text,bg='white',fg='#8a9aa6',font=(UI_FONT,9),anchor='w').pack(fill='x',pady=(9,5))
   def toggle(label,getter,action):
    row=tk.Frame(f,bg='white');row.pack(fill='x',pady=4)
-   tk.Label(row,text=label,bg='white',fg='#405969',font=('Microsoft YaHei UI',10)).pack(side='left')
+   tk.Label(row,text=label,bg='white',fg='#405969',font=(UI_FONT,10)).pack(side='left')
    def click():action();render()
-   b=tk.Button(row,command=click,bd=0,relief='flat',cursor='hand2',padx=9,pady=3,font=('Microsoft YaHei UI',9))
+   b=tk.Button(row,command=click,bd=0,relief='flat',cursor='hand2',padx=9,pady=3,font=(UI_FONT,9))
    def render():
     enabled=getter();b.config(text='开启  ●' if enabled else '○  关闭',bg='#e2f1f4' if enabled else '#f0f3f6',fg='#28576b' if enabled else '#81909c',activebackground='#dfebef')
    render();b.pack(side='right');return b
@@ -326,7 +347,7 @@ class App:
   section('发音偏好')
   toggle('查词后自动朗读',lambda:self.accent!=0,lambda:self.set_accent(0 if self.accent else self.preferred_accent))
   row=tk.Frame(f,bg='white');row.pack(fill='x',pady=(5,8))
-  tk.Label(row,text='默认口音',bg='white',fg='#7c8d9a',font=('Microsoft YaHei UI',9)).pack(side='left')
+  tk.Label(row,text='默认口音',bg='white',fg='#7c8d9a',font=(UI_FONT,9)).pack(side='left')
   def choose(accent):
    self.preferred_accent=accent
    if self.accent:self.accent=accent
@@ -340,6 +361,8 @@ class App:
   for button in (uk,us):
    button.bind('<Enter>',lambda e:paint_accents());button.bind('<Leave>',lambda e:paint_accents())
   paint_accents()
+  if IS_WINDOWS:self.button(f,'下载英美离线语音（约150 MB）',self.install_voices,small=True).pack(anchor='w',pady=5)
+  else:self.button(f,'启用 macOS 划词权限',lambda:mac.request_permissions(events),small=True).pack(anchor='w',pady=5)
   tk.Frame(f,bg='#edf1f4',height=1).pack(fill='x',pady=(3,7))
   quit=self.button(f,'退出应用',self.root.destroy,small=True);quit.config(fg='#8d6669');quit.pack(anchor='w')
   m.update_idletasks();self.settings_size=(max(round(258*self.scale),f.winfo_reqwidth()+2),f.winfo_reqheight()+2)
@@ -358,6 +381,7 @@ class App:
   y=max(rect.top+4,min(y,rect.bottom-height-4))
   m.geometry(f'{width}x{height}{x:+d}{y:+d}')
  def work_area(self,x,y):
+  if not IS_WINDOWS:return mac.work_area(x,y)
   from ctypes import wintypes
   class MONITORINFO(C.Structure):
    _fields_=[('cbSize',wintypes.DWORD),('rcMonitor',wintypes.RECT),('rcWork',wintypes.RECT),('dwFlags',wintypes.DWORD)]
@@ -370,7 +394,7 @@ class App:
   x=self.root.winfo_pointerx() if x is None else x;y=self.root.winfo_pointery() if y is None else y
   rect=self.work_area(x,y)
   x=max(rect.left+4,min(x+10,rect.right-width-4));y=y+24 if y+height+30<rect.bottom else y-height-12
-  y=max(rect.top+4,min(y,rect.bottom-height-4));win.geometry(f'{width}x{height}+{x}+{y}')
+  y=max(rect.top+4,min(y,rect.bottom-height-4));win.geometry(f'{width}x{height}{x:+d}{y:+d}')
  def prompt(self,s,source=None):
   s=normalize_query(s)
   if not source and not valid_query(s):return
@@ -396,7 +420,7 @@ class App:
    elif s:self.root.clipboard_clear();self.root.clipboard_append(s)
    p.destroy()
   tk.Label(bar,image=self.brand_icon,bg='white').pack(side='left',padx=(2,7))
-  query=self.button(bar,'⌕ 查词',choose);query.config(bg='#edf4f8',fg='#163c55',font=('Microsoft YaHei UI',10,'bold'));query.bind('<Enter>',lambda e:query.config(bg='#dfedf4'));query.bind('<Leave>',lambda e:query.config(bg='#edf4f8'));query.pack(side='left',padx=2)
+  query=self.button(bar,'⌕ 查词',choose);query.config(bg='#edf4f8',fg='#163c55',font=(UI_FONT,10,'bold'));query.bind('<Enter>',lambda e:query.config(bg='#dfedf4'));query.bind('<Leave>',lambda e:query.config(bg='#edf4f8'));query.pack(side='left',padx=2)
   self.button(bar,'🔊 英',lambda:choose(1),small=True).pack(side='left',padx=3)
   self.button(bar,'🔊 美',lambda:choose(2),small=True).pack(side='left',padx=3)
   self.button(bar,'复制',copy,small=True).pack(side='left',padx=3)
@@ -405,11 +429,16 @@ class App:
   p.update_idletasks();self.position(p,max(round(290*self.scale),bar.winfo_reqwidth()+2),max(round(43*self.scale),bar.winfo_reqheight()+2),x=source['x'] if source else None,y=source['y'] if source else None,physical=True)
   # A mouse click on the strip must leave focus/selection in the source app.
   # Apply NOACTIVATE before mapping, rather than after the first visible frame.
-  hwnd=u.GetParent(p.winfo_id());ex=u.GetWindowLongW(hwnd,-20);u.SetWindowLongW(hwnd,-20,ex|0x80|0x08000000)
-  p.deiconify();p.update_idletasks();u.ShowWindow(hwnd,4)
+  if IS_WINDOWS:
+   hwnd=u.GetParent(p.winfo_id());ex=u.GetWindowLongW(hwnd,-20);u.SetWindowLongW(hwnd,-20,ex|0x80|0x08000000)
+   p.deiconify();p.update_idletasks();u.ShowWindow(hwnd,4)
+  else:
+   try:self.root.tk.call('::tk::unsupported::MacWindowStyle','style',p._w,'help','noActivates')
+   except tk.TclError:pass
+   p.deiconify();p.update_idletasks()
   self.round_window(p,14)
   if source:record_stage('popup_shown',id=source['id'],latency_ms=round(time.time()*1000-source['emitted']))
-  if source:
+  if source and IS_WINDOWS:
    def check_visibility():
     if not p.winfo_exists():return
     from ctypes import wintypes
@@ -425,6 +454,7 @@ class App:
     else:p.destroy()
   p.after(12000,expire)
  def query_source(self,source,accent=None,copy_only=False,anchor=None):
+  if not IS_WINDOWS:return self.query_source_macos(source,accent,copy_only,anchor)
   # Only after the user clicks Query/Copy: activate the captured source, then copy.
   u.IsWindow.argtypes=[C.c_void_p];u.SetForegroundWindow.argtypes=[C.c_void_p];u.GetForegroundWindow.restype=C.c_void_p
   hwnd=source['hwnd'];version=self.selection_version
@@ -445,14 +475,14 @@ class App:
    self.clipboard_suppress_until=time.monotonic()+1.5
    # An explicit query may replace clipboard text. Clear old data first so
    # format/owner notifications cannot make a previous word look like a copy.
-   self.root.clipboard_clear();self.seq=u.GetClipboardSequenceNumber();before=self.seq
+   self.root.clipboard_clear();self.seq=clipboard_sequence();before=self.seq
    u.keybd_event(0x11,0,0,0);u.keybd_event(0x43,0,0,0);u.keybd_event(0x43,0,2,0);u.keybd_event(0x11,0,2,0)
    def read(attempt=0):
     if version!=self.selection_version:return
     if u.GetClipboardSequenceNumber()!=before:
      word=normalize_query(clipboard())
      if valid_query(word):
-      self.seq=u.GetClipboardSequenceNumber()
+      self.seq=clipboard_sequence()
       record_stage('query_copied',id=source['id'])
       if not copy_only:self.lookup(word,accent,anchor=anchor)
       return
@@ -507,16 +537,52 @@ class App:
      if serial!=self.audio_serial:return
      winsound.PlaySound(str(audio),winsound.SND_FILENAME)
      if serial==self.audio_serial:events.put(('status',('英式' if accent==1 else '美式')+'离线发音 · 播放完毕'))
-   except Exception:
-    if serial==self.audio_serial:events.put(('status','离线发音未能播放，请检查语音文件'))
+   except Exception as exc:
+    if serial==self.audio_serial:events.put(('status',str(exc) if isinstance(exc,SpeechUnavailable) else '发音未能播放，请检查语音设置'))
   threading.Thread(target=job,daemon=True).start()
+ def install_voices(self):
+  if getattr(self,'voice_installing',False):return
+  self.voice_installing=True;self.status.config(text='正在下载英美离线语音，首次约150 MB…')
+  def job():
+   try:
+    from scripts.setup_speech import install
+    install(DATA.resolve());events.put(('voices_ready','英美离线语音已就绪，可点击喇叭播放'))
+   except Exception:events.put(('voices_ready','语音下载未完成，请检查网络后重试'))
+  threading.Thread(target=job,daemon=True).start()
+ def query_source_macos(self,source,accent=None,copy_only=False,anchor=None):
+  version=self.selection_version
+  if not copy_only:self.reset_result('正在读取本次选中的单词…')
+  def failed():
+   if version!=self.selection_version:return
+   if not copy_only:self.reset_result('未能取词：请开启辅助功能权限，或复制单词后查询。')
+   if anchor:self.position(self.root,380,420,x=anchor[0],y=anchor[1])
+   self.show()
+  if not mac.activate_source(source['pid']):failed();return
+  def copy_now():
+   if version!=self.selection_version:return
+   if not mac.source_is_frontmost(source['pid']):failed();return
+   self.clipboard_suppress_until=time.monotonic()+1.5
+   self.root.clipboard_clear();before=clipboard_sequence();self.seq=before
+   if not mac.copy_selection():failed();return
+   def read(attempt=0):
+    if version!=self.selection_version:return
+    if clipboard_sequence()!=before:
+     word=normalize_query(clipboard())
+     if valid_query(word):
+      self.seq=clipboard_sequence()
+      if not copy_only:self.lookup(word,accent,anchor=anchor)
+      return
+    if attempt<18:self.root.after(35,lambda:read(attempt+1))
+    else:failed()
+   self.root.after(35,read)
+  self.root.after(100,copy_now)
  def save(self):
   if not self.word:return
   p=DATA/'生词本.txt';existing=p.read_text(encoding='utf-8') if p.exists() else ''
   if self.word not in existing.splitlines():p.write_text(existing+self.word+'\n',encoding='utf-8')
   self.status.config(text='已加入生词本')
  def poll(self):
-  seq=u.GetClipboardSequenceNumber()
+  seq=clipboard_sequence()
   if seq!=self.seq:
    self.seq=seq
    if self.auto.get() and time.monotonic()>=self.clipboard_suppress_until:self.prompt(clipboard())
@@ -528,17 +594,32 @@ class App:
     identifier,word=value
     if self.pending_source and self.pending_source['id']==identifier:self.pending_source['word']=word
    elif kind=='lookup':self.lookup(value)
+   elif kind=='hotkey_source':
+    self.selection_version+=1;self.query_source(value,anchor=(value['x']-10,value['y']-24))
+   elif kind=='voices_ready':self.voice_installing=False;self.status.config(text=value)
    elif kind=='selection':
     if self.selection.get():self.prompt(value)
    elif kind=='show':self.show();self.status.config(text=value)
    else:self.status.config(text=value)
   self.root.after(25,self.poll)
-if __name__=='__main__':
- mutex=k.CreateMutexW(None,False,'QingCiDesktopDictionaryV1')
- if k.GetLastError()==183:
-  hwnd=u.FindWindowW(None,'沃尔翻译官');u.ShowWindow(hwnd,9);u.SetForegroundWindow(hwnd)
+def main():
+ if '--smoke-test' in sys.argv:
+  from smoke_test import run
+  try:report=run(BASE)
+  except Exception as error:report={'error':str(error)}
+  encoded=json.dumps(report,ensure_ascii=False)
+  if '--smoke-report' in sys.argv:Path(sys.argv[sys.argv.index('--smoke-report')+1]).write_text(encoded,encoding='utf-8')
+  if sys.stdout:print(encoded)
+  raise SystemExit(1 if 'error' in report else 0)
+ if IS_WINDOWS:
+  mutex=k.CreateMutexW(None,False,'QingCiDesktopDictionaryV1')
+  if k.GetLastError()==183:
+   hwnd=u.FindWindowW(None,'沃尔翻译官');u.ShowWindow(hwnd,9);u.SetForegroundWindow(hwnd);return
  else:
-  try:App().root.mainloop()
-  except Exception:
-   exc,value,tb=sys.exc_info();write_error('startup',exc,value,tb)
-   u.MessageBoxW(None,'启动失败，详细信息已写入：\n'+str(DATA/'application-errors.log'),'沃尔翻译官',16)
+  if not mac.single_instance(DATA):return
+ try:App().root.mainloop()
+ except Exception:
+  exc,value,tb=sys.exc_info();write_error('startup',exc,value,tb)
+  if IS_WINDOWS:u.MessageBoxW(None,'启动失败，详细信息已写入：\n'+str(DATA/'application-errors.log'),'沃尔翻译官',16)
+  else:mac.show_error('启动失败，详细信息已写入：'+str(DATA/'application-errors.log'))
+if __name__=='__main__':main()

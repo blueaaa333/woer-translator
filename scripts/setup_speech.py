@@ -5,7 +5,8 @@ Read docs/SPEECH.md and the upstream terms before choosing to run this command.
 """
 import argparse,hashlib,json,shutil,urllib.request,zipfile
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[1]
+import sys
+ROOT=Path(sys._MEIPASS) if getattr(sys,'frozen',False) else Path(__file__).resolve().parents[1]
 
 def install(root):
     manifest=json.loads((ROOT/'scripts'/'speech-downloads.json').read_text(encoding='utf-8'))

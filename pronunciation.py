@@ -1,4 +1,4 @@
-import atexit,hashlib,json,os,subprocess,threading,wave,queue,time
+import atexit,hashlib,json,os,subprocess,threading,wave,queue,time,sys,platform
 from pathlib import Path
 from lexicon import normalize_query,valid_query
 
@@ -26,22 +26,27 @@ def phonetic_labels(result):
     if generic and missing:note='通用音标' if len(missing)==2 else ('英音栏为通用音标' if missing[0]==1 else '美音栏为通用音标')
     return dict(uk=selected.get(1,(0,generic))[1],us=selected.get(2,(0,generic))[1],note=note)
 
+class SpeechUnavailable(RuntimeError):pass
+
 class SpeechEngine:
-    def __init__(self,base,cache):
-        self.root=Path(base)/'speech';self.cache=Path(cache)
+    def __init__(self,base,cache,user_root=None):
+        self.root=Path(user_root) if user_root else Path(base)/'speech';self.cache=Path(cache)
+        if not (self.root/'voices').exists() and (Path(base)/'speech'/'voices').exists():self.root=Path(base)/'speech'
         self.processes=set();self.servers={};self.lock=threading.RLock();self.closed=threading.Event()
         atexit.register(self.close);threading.Thread(target=self.reap,daemon=True).start()
     def render(self,word,accent):
         if self.closed.is_set():raise RuntimeError('Speech engine closed')
         word=normalize_query(word)
         if accent not in (1,2) or not valid_query(word):raise ValueError('Invalid speech request')
+        if sys.platform=='darwin':return self.render_system_voice(word,accent)
         folder=self.root/'voices'/('uk' if accent==1 else 'us')
         model=folder/'voice.onnx';config_path=folder/'voice.onnx.json'
+        if not config_path.is_file():raise SpeechUnavailable('请在“···”中下载英美离线语音，首次约150 MB')
         config=json.loads(config_path.read_text(encoding='utf-8'))
         expected='en_GB' if accent==1 else 'en_US'
         if config.get('language',{}).get('code')!=expected:raise ValueError('Voice accent does not match button')
         executable=next((p for p in [self.root/'runtime'/'piper'/'piper.exe',self.root/'runtime'/'piper.exe'] if p.exists()),None)
-        if executable is None:raise FileNotFoundError('Offline voice runtime missing')
+        if executable is None:raise SpeechUnavailable('请在“···”中下载英美离线语音')
         self.cache.mkdir(parents=True,exist_ok=True)
         key=f'{expected}|{config.get("dataset")}|{model.stat().st_size}|{model.stat().st_mtime_ns}|{word.lower()}'
         target=self.cache/(hashlib.sha256(key.encode()).hexdigest()+'.wav')
@@ -73,6 +78,30 @@ class SpeechEngine:
             except Exception:
                 if proc.poll() is None:proc.kill()
                 self.servers.pop(accent,None);self.processes.discard(proc);raise
+    def render_system_voice(self,word,accent):
+        from mac_platform import choose_voice
+        catalog=subprocess.check_output(['/usr/bin/say','-v','?'],text=True,timeout=10)
+        voice=choose_voice(catalog,accent)
+        if not voice:raise SpeechUnavailable('系统缺少'+('英式' if accent==1 else '美式')+'语音，请在 macOS“辅助功能→朗读内容→系统声音”中下载对应口音')
+        self.cache.mkdir(parents=True,exist_ok=True)
+        key='macOS|'+platform.mac_ver()[0]+'|'+voice+'|'+str(accent)+'|'+word.lower()
+        target=self.cache/(hashlib.sha256(key.encode()).hexdigest()+'.wav')
+        if target.exists() and self.valid_wave(target):return target
+        temporary=target.with_suffix('.aiff')
+        with self.lock:
+            if self.closed.is_set():raise RuntimeError('Speech engine closed')
+            proc=subprocess.Popen(['/usr/bin/say','-v',voice,'-o',str(temporary)],stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            self.processes.add(proc)
+            try:
+                proc.communicate(word.encode('utf-8'),timeout=30)
+                if proc.returncode:raise SpeechUnavailable('系统语音合成失败，请检查所选口音是否已下载')
+                subprocess.run(['/usr/bin/afconvert','-f','WAVE','-d','LEI16',str(temporary),str(target)],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=15)
+                if not self.valid_wave(target):raise SpeechUnavailable('系统语音未生成有效音频')
+                return target
+            finally:
+                if proc.poll() is None:proc.kill()
+                self.processes.discard(proc)
+                if temporary.exists():temporary.unlink()
     @staticmethod
     def valid_wave(path):
         try:

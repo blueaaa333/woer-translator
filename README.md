@@ -4,7 +4,7 @@
 
 ![沃尔翻译官宣传图，界面示意](docs/promo.png)
 
-轻量的 Windows 桌面英汉查词工具。选中英文后，先出现小工具条；点击“查词”再展开释义。适合在网页、支持文字选择的 PDF 和常见文字软件里阅读英文。
+轻量的桌面英汉查词工具，提供 Windows 与 macOS 版本。选中英文后，先出现小工具条；点击“查词”再展开释义。适合在网页、支持文字选择的 PDF 和常见文字软件里阅读英文。
 
 - 浅蓝与白色的小窗，中文释义优先，补充词典和来源放在下方。
 - 英式、美式两个独立的离线合成语音按钮；支持词典提供的音标。
@@ -14,7 +14,13 @@
 
 ## 开始使用
 
-这是源码发行版，当前不提供经发行审核的免安装 EXE。需要 Windows 10/11、Python 3.11–3.13（含 Tkinter）及系统自带 .NET Framework C# 编译器。已在 Windows / Python 3.13 环境检查；扫描型 PDF 没有文字选区，不能直接划词。
+[下载桌面安装包](https://github.com/blueaaa333/woer-translator/releases/latest)：Windows x64 安装器 / 便携版，Mac Apple 芯片 / Intel 的 DMG 与 PKG。安装包内置解释器和公开词库，不需另装 Python。具体限制见 [发行说明](docs/RELEASE_NOTES.md)。
+
+Windows 10/11；Mac 在 macOS 15 构建检查。Mac 是首个预览版本，尚未完成实体 Mac 上所有浏览器的人工验收。Windows 安装器未作商业签名，Mac 未作 Developer ID 签名及 Apple 公证。Mac 划词需在“系统设置 → 隐私与安全”允许辅助功能及输入监控；在“···”菜单中主动发起授权。未授权可手动或复制查询。扫描型 PDF 没有文字选区，不能直接划词。
+
+Windows 安装包可从“··· → 下载英美离线语音”按需安装声音；Mac 使用系统本地英美语音，缺少某口音时会提示从系统设置下载。[Packages](https://github.com/blueaaa333/woer-translator/packages) 提供 npm 下载与校验工具，普通用户直接下载安装包即可。
+
+如需从源码启动，要求 Python 3.11–3.13（含 Tkinter）；Windows 还需要系统自带的 .NET Framework C# 编译器。
 
 在项目目录的 PowerShell 中运行：
 
@@ -28,9 +34,9 @@
 .\run.ps1 -WithSpeech
 ```
 
-这一步从上游下载运行组件和两套模型，合计约 150 MB，需要网络；之后查词、合成语音均在本机完成。源码仓库不附带这些第三方二进制和模型。没有安装语音依赖时，查词仍可用，发音按钮会提示未能播放。
+这一步仅用于 Windows，从上游下载运行组件和两套模型，合计约 150 MB，需要网络；之后查词、合成语音均在本机完成。源码与安装包不附带这些第三方二进制和模型。Mac 源码运行：安装 requirements.txt、执行 scripts/prepare_data.py 后运行 python app.py。
 
-保持软件运行，在支持的应用中拖选或双击英文，点击工具条中的“查词”“英”“美”或“复制”。也可主动复制单词显示工具条，或按 `Ctrl+Alt+D`。`×` / `Esc` 收起窗口，“··· → 退出应用”结束程序。
+保持软件运行，在支持的应用中拖选或双击英文，点击工具条中的“查词”“英”“美”或“复制”。也可主动复制单词显示工具条，或按 Windows 的 `Ctrl+Alt+D` / Mac 的 `⌘⌥D`。`×` / `Esc` 收起窗口，“··· → 退出应用”结束程序。
 
 ## 公开词库的范围
 
@@ -55,8 +61,8 @@ python -m unittest discover -s tests -p "test_*.py"
 .\build_bridge.ps1
 ```
 
-应用入口为 `app.py`；窗口与取词助手需要 Windows，词典数据检查可以单独运行。原始第三方数据的完整重建方法见 `SOURCES.md`。欢迎通过 Issue 提交错误词条、来源链接及最小复现步骤，请勿提交密码、私有文件或整份本机日志。
+应用入口为 `app.py`，Mac 集成位于 `mac_platform.py`。安装包须在目标操作系统运行 `python scripts/build_release.py` 构建，Windows 需安装 Inno Setup 6；GitHub Actions 分别使用 Windows、Mac arm64、Mac x64 环境并检查冻结后的程序，再上传 Release。原始第三方数据的完整重建方法见 `SOURCES.md`。欢迎通过 Issue 提交错误词条、来源链接及最小复现步骤，请勿提交密码、私有文件或整份本机日志。
 
 ---
 
-Woer Translator is a compact Windows desktop dictionary with selection-triggered actions, Simplified Chinese definitions, usage examples, morphology explanations, and optional independent UK/US offline speech models. Original application code is MIT; third-party data and dependencies retain their own licenses.
+Woer Translator is a compact desktop dictionary for Windows and macOS, with selection-triggered actions, Simplified Chinese definitions, usage examples, morphology explanations, and distinct UK/US speech. Original application code is MIT; third-party data and dependencies retain their own licenses. The initial macOS build is a preview without Developer ID signing or notarization.

@@ -1,0 +1,10 @@
+Woer Translator / 沃尔翻译官
+
+Original application code: MIT. Dictionary data, icons and runtime components
+retain their own licenses. See THIRD_PARTY_NOTICES.md and licenses/ in the
+application resources. This installer does not include Piper binaries or models.
+Speech dependencies are optional and downloaded directly from upstream only
+when the user chooses the download action in Settings.
+
+Uninstalling preserves local settings, vocabulary lists and speech downloads.
+No clipboard text or query history is uploaded by the application.
