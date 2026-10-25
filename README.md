@@ -46,6 +46,10 @@ Windows 安装包可从“··· → 下载英美离线语音”按需安装声�
 
 ## 许可证与隐私
 
+### Code signing policy
+
+正在申请 SignPath Foundation 的 Windows 开源签名支持，目前尚未获批，现有 Windows 安装包仍未签名。维护角色、构建来源和拟采用的人工签名审批方式见 [Code signing policy](docs/CODE_SIGNING_POLICY.md)。
+
 原创应用代码按 [MIT](LICENSE) 开源。词库、图标和第三方依赖保留各自许可，**整个仓库不能一概当作 MIT 数据包**。请阅读 [第三方声明](THIRD_PARTY_NOTICES.md)、[来源与重建方式](SOURCES.md) 和 [发布前核查](docs/LICENSE_AUDIT.md)。
 
 应用没有第三方私有查词接口，没有查询词上传或分析服务。点击“来源”会在浏览器打开公开来源页面。下载依赖时会连接相应上游。
