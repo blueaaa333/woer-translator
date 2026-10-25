@@ -3,17 +3,276 @@
     "translation": "adj. 经过充分研究的；调查深入的；有扎实资料依据的",
     "definition": "Based on careful investigation and a thorough study of relevant information.",
     "note": "常修饰 report、article、book、argument 等；强调研究或资料准备充分，不等于结论一定正确。作表语时也常写作 well researched。",
-    "examples": [["报告、文章：调查深入的", "She submitted a well-researched report on urban transport.", "她提交了一份对城市交通进行深入调查的报告。"], ["论点：有充分研究依据的", "His argument was well researched, but the evidence was still open to debate.", "他的论点有充分的研究依据，但证据仍有讨论的余地。"], ["选题：已得到充分研究的", "This is a well-researched topic, so we need a more specific question.", "这个选题已经得到充分研究，因此我们需要提出一个更具体的问题。"]]
+    "examples": [
+      [
+        "报告、文章：调查深入的",
+        "She submitted a well-researched report on urban transport.",
+        "她提交了一份对城市交通进行深入调查的报告。"
+      ],
+      [
+        "论点：有充分研究依据的",
+        "His argument was well researched, but the evidence was still open to debate.",
+        "他的论点有充分的研究依据，但证据仍有讨论的余地。"
+      ],
+      [
+        "选题：已得到充分研究的",
+        "This is a well-researched topic, so we need a more specific question.",
+        "这个选题已经得到充分研究，因此我们需要提出一个更具体的问题。"
+      ]
+    ]
   },
-  "well-supported": {"translation": "adj. 有充分证据支持的；得到有力支持的", "definition": "Backed by strong evidence or by substantial practical support.", "examples": [["证据支持", "The conclusion is well-supported by the survey results.", "调查结果为这一结论提供了充分支持。"], ["实际支持", "The project is well-supported by local volunteers.", "这个项目得到了当地志愿者的大力支持。"]]},
-  "well-documented": {"translation": "adj. 有充分记录的；有翔实资料佐证的", "definition": "Recorded in detail or supported by abundant written evidence.", "examples": [["有记录", "The region has a well-documented history of flooding.", "这个地区的洪水历史有详尽的记录。"], ["软件文档完善", "A well-documented tool is easier for new users to learn.", "文档完善的工具更方便新用户学习。"]]},
-  "well-designed": {"translation": "adj. 设计精良的；规划周密的", "definition": "Planned carefully so that its form or operation serves its purpose effectively.", "examples": [["设计精良", "A well-designed interface makes common tasks easy.", "设计精良的界面让常用操作变得简单。"]]},
-  "well-organized": {"translation": "adj. 组织有序的；安排妥当的；有条理的", "definition": "Arranged or managed in a clear and efficient way.", "examples": [["有条理", "Her notes are clear and well-organized.", "她的笔记清楚而有条理。"]]},
-  "well-informed": {"translation": "adj. 消息灵通的；掌握充分信息的；有见识的", "definition": "Having reliable knowledge about a subject or current events.", "examples": [["信息充分", "Read both reports before making a well-informed decision.", "在作出有充分依据的决定前，先读一读两份报告。"]]},
-  "evidence-based": {"translation": "adj. 以证据为基础的；循证的", "definition": "Guided by relevant evidence rather than only by assumption or personal belief.", "examples": [["以证据为依据", "The team proposed an evidence-based approach to training.", "团队提出了一种以证据为依据的培训方法。"]]},
-  "research-based": {"translation": "adj. 以研究为基础的；有研究依据的", "definition": "Developed from or supported by research findings.", "examples": [["有研究依据", "The guide offers research-based advice for language learners.", "这份指南为语言学习者提供有研究依据的建议。"]]},
-  "context-dependent": {"translation": "adj. 依赖语境的；取决于具体情境的", "definition": "Changing according to the surrounding language or the circumstances in which something occurs.", "examples": [["取决于语境", "The meaning of this expression is context-dependent.", "这个表达的含义取决于语境。"]]},
-  "time-consuming": {"translation": "adj. 耗时的；需要花费大量时间的", "definition": "Requiring a substantial amount of time to complete.", "examples": [["耗时", "Checking every entry manually is time-consuming.", "逐条人工核查很耗时间。"]]},
-  "data-driven": {"translation": "adj. 由数据驱动的；以数据为决策依据的", "definition": "Directed by the analysis and interpretation of data.", "examples": [["以数据为依据", "We need a data-driven plan for improving the service.", "我们需要一个以数据为依据的服务改进计划。"]]},
-  "well-calibrated": {"translation": "adj. 校准良好的；调校准确的", "definition": "Adjusted carefully so that measurements or responses match the intended standard.", "examples": [["仪器校准", "Use a well-calibrated scale for this measurement.", "这次测量要使用校准良好的秤。"]]}
+  "well-supported": {
+    "translation": "adj. 有充分证据支持的；得到有力支持的",
+    "definition": "Backed by strong evidence or by substantial practical support.",
+    "examples": [
+      [
+        "证据支持",
+        "The conclusion is well-supported by the survey results.",
+        "调查结果为这一结论提供了充分支持。"
+      ],
+      [
+        "实际支持",
+        "The project is well-supported by local volunteers.",
+        "这个项目得到了当地志愿者的大力支持。"
+      ]
+    ]
+  },
+  "well-documented": {
+    "translation": "adj. 有充分记录的；有翔实资料佐证的",
+    "definition": "Recorded in detail or supported by abundant written evidence.",
+    "examples": [
+      [
+        "有记录",
+        "The region has a well-documented history of flooding.",
+        "这个地区的洪水历史有详尽的记录。"
+      ],
+      [
+        "软件文档完善",
+        "A well-documented tool is easier for new users to learn.",
+        "文档完善的工具更方便新用户学习。"
+      ]
+    ]
+  },
+  "well-designed": {
+    "translation": "adj. 设计精良的；规划周密的",
+    "definition": "Planned carefully so that its form or operation serves its purpose effectively.",
+    "examples": [
+      [
+        "设计精良",
+        "A well-designed interface makes common tasks easy.",
+        "设计精良的界面让常用操作变得简单。"
+      ]
+    ]
+  },
+  "well-organized": {
+    "translation": "adj. 组织有序的；安排妥当的；有条理的",
+    "definition": "Arranged or managed in a clear and efficient way.",
+    "examples": [
+      [
+        "有条理",
+        "Her notes are clear and well-organized.",
+        "她的笔记清楚而有条理。"
+      ]
+    ]
+  },
+  "well-informed": {
+    "translation": "adj. 消息灵通的；掌握充分信息的；有见识的",
+    "definition": "Having reliable knowledge about a subject or current events.",
+    "examples": [
+      [
+        "信息充分",
+        "Read both reports before making a well-informed decision.",
+        "在作出有充分依据的决定前，先读一读两份报告。"
+      ]
+    ]
+  },
+  "evidence-based": {
+    "translation": "adj. 以证据为基础的；循证的",
+    "definition": "Guided by relevant evidence rather than only by assumption or personal belief.",
+    "examples": [
+      [
+        "以证据为依据",
+        "The team proposed an evidence-based approach to training.",
+        "团队提出了一种以证据为依据的培训方法。"
+      ]
+    ]
+  },
+  "research-based": {
+    "translation": "adj. 以研究为基础的；有研究依据的",
+    "definition": "Developed from or supported by research findings.",
+    "examples": [
+      [
+        "有研究依据",
+        "The guide offers research-based advice for language learners.",
+        "这份指南为语言学习者提供有研究依据的建议。"
+      ]
+    ]
+  },
+  "context-dependent": {
+    "translation": "adj. 依赖语境的；取决于具体情境的",
+    "definition": "Changing according to the surrounding language or the circumstances in which something occurs.",
+    "examples": [
+      [
+        "取决于语境",
+        "The meaning of this expression is context-dependent.",
+        "这个表达的含义取决于语境。"
+      ]
+    ]
+  },
+  "time-consuming": {
+    "translation": "adj. 耗时的；需要花费大量时间的",
+    "definition": "Requiring a substantial amount of time to complete.",
+    "examples": [
+      [
+        "耗时",
+        "Checking every entry manually is time-consuming.",
+        "逐条人工核查很耗时间。"
+      ]
+    ]
+  },
+  "data-driven": {
+    "translation": "adj. 由数据驱动的；以数据为决策依据的",
+    "definition": "Directed by the analysis and interpretation of data.",
+    "examples": [
+      [
+        "以数据为依据",
+        "We need a data-driven plan for improving the service.",
+        "我们需要一个以数据为依据的服务改进计划。"
+      ]
+    ]
+  },
+  "well-calibrated": {
+    "translation": "adj. 校准良好的；调校准确的",
+    "definition": "Adjusted carefully so that measurements or responses match the intended standard.",
+    "examples": [
+      [
+        "仪器校准",
+        "Use a well-calibrated scale for this measurement.",
+        "这次测量要使用校准良好的秤。"
+      ]
+    ]
+  },
+  "double jeopardy law": {
+    "translation": "营销学：双重劣势定律（也译双重危机法则）\n法律：禁止双重审判原则",
+    "definition": "A term with distinct meanings in marketing and criminal law.",
+    "note": "营销语境：小品牌通常既拥有更少买家，买家的平均购买频率也略低。出现 buying behaviour、brand、market share 等词时，优先考虑此义。\n法律语境：限制对同一犯罪重复追诉或处罚；具体适用范围取决于司法辖区。仅选中短语时，软件不会假装已读取周围页面。",
+    "examples": [
+      [
+        "营销：买家少、购买频率也略低",
+        "The double jeopardy law helps explain why smaller brands have fewer, less frequent buyers.",
+        "双重劣势定律有助于解释为什么小品牌买家更少，而且这些买家购买的频率也略低。"
+      ],
+      [
+        "法律：禁止重复追诉",
+        "The lawyer raised a double jeopardy objection.",
+        "律师提出了禁止双重审判方面的异议。"
+      ]
+    ]
+  },
+  "law of double jeopardy": {
+    "translation": "营销学：双重劣势定律（也译双重危机法则）\n法律：禁止双重审判原则",
+    "definition": "A term with distinct meanings in marketing and criminal law.",
+    "note": "营销语境：小品牌通常既拥有更少买家，买家的平均购买频率也略低。出现 buying behaviour、brand、market share 等词时，优先考虑此义。\n法律语境：限制对同一犯罪重复追诉或处罚；具体适用范围取决于司法辖区。仅选中短语时，软件不会假装已读取周围页面。",
+    "examples": [
+      [
+        "营销：买家少、购买频率也略低",
+        "The double jeopardy law helps explain why smaller brands have fewer, less frequent buyers.",
+        "双重劣势定律有助于解释为什么小品牌买家更少，而且这些买家购买的频率也略低。"
+      ],
+      [
+        "法律：禁止重复追诉",
+        "The lawyer raised a double jeopardy objection.",
+        "律师提出了禁止双重审判方面的异议。"
+      ]
+    ]
+  },
+  "double jeopardy": {
+    "translation": "营销学：双重劣势定律（也译双重危机法则）\n法律：禁止双重审判原则",
+    "definition": "A term with distinct meanings in marketing and criminal law.",
+    "note": "营销语境：小品牌通常既拥有更少买家，买家的平均购买频率也略低。出现 buying behaviour、brand、market share 等词时，优先考虑此义。\n法律语境：限制对同一犯罪重复追诉或处罚；具体适用范围取决于司法辖区。仅选中短语时，软件不会假装已读取周围页面。",
+    "examples": [
+      [
+        "营销：买家少、购买频率也略低",
+        "The double jeopardy law helps explain why smaller brands have fewer, less frequent buyers.",
+        "双重劣势定律有助于解释为什么小品牌买家更少，而且这些买家购买的频率也略低。"
+      ],
+      [
+        "法律：禁止重复追诉",
+        "The lawyer raised a double jeopardy objection.",
+        "律师提出了禁止双重审判方面的异议。"
+      ]
+    ]
+  },
+  "buying behaviour": {
+    "translation": "n. 购买行为；消费者购买行为",
+    "definition": "",
+    "note": "指消费者如何选择、购买和使用产品，也可涉及购买频率、品牌选择等。",
+    "examples": []
+  },
+  "buying behavior": {
+    "translation": "n. 购买行为；消费者购买行为",
+    "definition": "",
+    "note": "指消费者如何选择、购买和使用产品，也可涉及购买频率、品牌选择等。",
+    "examples": []
+  },
+  "market penetration": {
+    "translation": "n. 市场渗透；市场渗透率",
+    "definition": "",
+    "note": "在消费者研究中，常指一定时期内购买某品牌的人占相关人群的比例。",
+    "examples": []
+  },
+  "brand loyalty": {
+    "translation": "n. 品牌忠诚度",
+    "definition": "",
+    "note": "可能指重复购买行为，也可能指对品牌的态度；需结合研究采用的指标判断。",
+    "examples": []
+  },
+  "purchase frequency": {
+    "translation": "n. 购买频率",
+    "definition": "",
+    "note": "指在指定时期内发生购买的次数。",
+    "examples": []
+  },
+  "market share": {
+    "translation": "n. 市场份额；市场占有率",
+    "definition": "",
+    "note": "通常按销售额或销量计算，不能与买家人数占比直接等同。",
+    "examples": []
+  },
+  "consumer behaviour": {
+    "translation": "n. 消费者行为",
+    "definition": "",
+    "note": "涵盖消费者的选择、购买、使用和处置商品或服务的行为。",
+    "examples": []
+  },
+  "consumer behavior": {
+    "translation": "n. 消费者行为",
+    "definition": "",
+    "note": "涵盖消费者的选择、购买、使用和处置商品或服务的行为。",
+    "examples": []
+  },
+  "in terms of": {
+    "translation": "prep. 就……而言；从……方面来看",
+    "definition": "",
+    "note": "用于限定讨论的角度或衡量标准。",
+    "examples": []
+  },
+  "as opposed to": {
+    "translation": "prep. 而不是；与……相对",
+    "definition": "",
+    "note": "用于对比两个选项或观点。",
+    "examples": []
+  },
+  "account for": {
+    "translation": "v. 占（比例）；解释；对……作出说明",
+    "definition": "",
+    "note": "The cost accounts for half the budget：费用占预算的一半。This may account for the difference：这可能解释该差异。",
+    "examples": []
+  },
+  "in light of": {
+    "translation": "prep. 鉴于；考虑到",
+    "definition": "",
+    "note": "表示依据某种情况重新判断或采取行动。",
+    "examples": []
+  }
 }

@@ -89,10 +89,12 @@ def definition_sections(result):
   key=re.sub(r'\s+','',text)
   if text and key not in seen:primary.append(dict(kind=kind,text=text));seen.add(key)
  note=word_form_note(result)
+ if result.get('machine_translation'):
+  add('meaning',result['machine_translation']);primary.append(dict(kind='note',text='机器翻译 · 需结合上下文核对'));sources.append('LibreTranslate（自托管）')
  for entry in result.get('compounds',[]):
   add('meaning',normalize_pos(entry['translation']))
   if entry.get('note'):primary.append(dict(kind='note',text=entry['note']))
-  details.append(dict(kind='english',text=entry['definition']));sources.append('自编复合词补充')
+  details.append(dict(kind='english',text=entry['definition']));sources.append('自编短语与复合词补充')
  for entry in result['entries']:
   if entry['translation']:
    if entry['word']!=result['word']:add('label','原形 '+entry['word'])
@@ -140,7 +142,7 @@ def definition_sections(result):
    primary.insert(0,dict(kind='note',text='中文释义暂缺，以下为已有英文释义。'))
    # English-only entries still show their definition without requiring a click.
    primary.extend(section for section in details if section['kind']=='english');details=[section for section in details if section['kind']!='english']
-  elif not primary:primary.append(dict(kind='note',text='本地词库暂未收录此词。请检查拼写。'))
+  elif not primary:primary.append(dict(kind='note',text='本地词库暂未收录此词或短语。可在设置中启用本地短语翻译，或补充上下文后再查询。'))
  return dict(primary=[dict(s,text=simplified(s['text'])) for s in primary],details=[dict(s,text=simplified(s['text'])) for s in details],sources=list(dict.fromkeys(simplified(source) for source in sources)))
 
 def definition_text(result):

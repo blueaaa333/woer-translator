@@ -374,6 +374,11 @@ class App:
    def render():
     enabled=getter();b.config(text='开启  ●' if enabled else '○  关闭',bg='#e2f1f4' if enabled else '#f0f3f6',fg='#28576b' if enabled else '#81909c',activebackground='#dfebef')
    render();b.pack(side='right');return b
+  section('短语翻译')
+  def translation_toggle():
+   self.preferences['phrase_translation']=not self.preferences.get('phrase_translation',False);self.save_preferences()
+  toggle('使用本地翻译服务',lambda:self.preferences.get('phrase_translation',False),translation_toggle)
+  self.button(f,'本地翻译部署指南 ↗',lambda:__import__('webbrowser').open('https://github.com/blueaaa333/woer-translator/blob/main/docs/PHRASES.md'),small=True).pack(anchor='w',pady=3)
   section('划词与复制')
   def select_toggle():
    self.selection.set(not self.selection.get())
@@ -594,6 +599,14 @@ class App:
   if self.player and not self.testing and not self.preferences.get('legacy_audio',False):self.player.warm(self.preferences.get('audio_device',''))
   chosen=self.accent if accent is None else accent
   if chosen:self.speak(chosen)
+  if ' ' in s and not self.result.get('compounds') and self.preferences.get('phrase_translation',False) and not self.testing:
+   serial=self.selection_version;self.status.config(text='正在翻译完整短语…')
+   def translate_job():
+    from phrase_translation import translate,TranslationUnavailable
+    try:value=translate(s);error=False
+    except TranslationUnavailable as exc:value=str(exc);error=True
+    events.put(('phrase_result',(serial,s,value,error)))
+   threading.Thread(target=translate_job,daemon=True).start()
  def audio_check(self):
   from audio_settings import show
   show(self,DATA)
@@ -675,6 +688,12 @@ class App:
     elif kind=='resolved':
      identifier,word=value
      if self.pending_source and self.pending_source['id']==identifier:self.pending_source['word']=word
+    elif kind=='phrase_result':
+     from phrase_translation import accept_result
+     if accept_result(self.selection_version,self.word,value):
+      if not value[3]:
+       self.result['machine_translation']=value[2];self.render()
+      self.status.config(text=value[2] if value[3] else '短语机器翻译 · 请结合上下文核对')
     elif kind=='lookup':self.lookup(value)
     elif kind=='hotkey_source':
      self.selection_version+=1;self.query_source(value,anchor=(value['x']-10,value['y']-24))
