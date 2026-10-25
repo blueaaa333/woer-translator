@@ -1,4 +1,10 @@
-沃尔翻译官首个桌面安装包版本，提供浅蓝小窗、划词工具条、简体释义、分义例句与中文词形说明。
+沃尔翻译官 v0.2.1：补充 Mac 首次运行指南与海报、确认来源后的命令复制入口，以及首次打开引导和菜单中的常驻帮助入口。
+
+**Mac 用户请先看完 [首次运行指南](https://github.com/blueaaa333/woer-translator/blob/main/docs/MAC_FIRST_RUN.md)**。不要把“无法验证开发者”和“文件已损坏 / 检测到恶意软件”混为一谈。确认下载与 SHA-256 后，优先使用系统“仍要打开”入口；命令仅为可选手动操作，成功后不需要重复执行。
+
+![Mac 首次运行海报](https://raw.githubusercontent.com/blueaaa333/woer-translator/main/docs/mac-first-run-poster.png)
+
+Release 附带可下载的 `Mac首次运行指南.html` 与海报；DMG 内也包含这两份说明。首次成功打开后的引导可从右上角“··· → Mac 首次运行指南”重新查看。
 
 ### 下载选择
 
@@ -24,3 +30,7 @@ Windows 安装器尚无商业代码签名；Mac App 仅作本地临时签名，�
 ### GitHub Packages
 
 `@blueaaa333/woer-translator` 是 npm 安装包下载器，可自动选择平台并校验发行文件。普通用户直接下载上面的安装包即可，不需要 Node.js；npm 不会自动运行桌面程序。
+
+### Code signing policy
+
+正在申请 SignPath Foundation 的 Windows 开源签名支持，尚未获批，Windows 文件仍未签名。详见 [Code signing policy](https://github.com/blueaaa333/woer-translator/blob/main/docs/CODE_SIGNING_POLICY.md)。

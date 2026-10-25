@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>沃尔翻译官 · Mac 首次运行指南</title>
+<style>
+:root{color-scheme:light;--ink:#183d50;--muted:#5b7180;--blue:#0b6e97}*{box-sizing:border-box}body{margin:0;background:#f5f9fa;color:var(--ink);font:17px/1.8 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}main{max-width:900px;margin:auto;padding:48px 28px 72px}h1{font-size:38px;line-height:1.25;letter-spacing:-1px;margin:18px 0 12px}h2{font-size:23px;line-height:1.4}p{margin:12px 0}.eyebrow{color:var(--blue);font-weight:650}.intro{font-size:21px}section{background:white;border:1px solid #e0ebef;border-radius:22px;padding:24px 28px;margin:22px 0}a{color:#075e85;text-underline-offset:3px}ol,ul{padding-left:24px}li{margin:9px 0}.note{color:var(--muted);font-size:15px}.warning{border-left:4px solid #a87336;background:#fffaf1;padding:13px 16px;border-radius:4px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#143647;color:white;border-radius:14px;padding:20px;font:15px/1.7 ui-monospace,Menlo,monospace}button{border:0;border-radius:10px;padding:12px 20px;background:#08678d;color:white;font:inherit;cursor:pointer}button:disabled{background:#dce6eb;color:#637986;cursor:default}label{display:block;margin:18px 0}input{margin-right:9px;accent-color:#08678d}footer{color:var(--muted);padding:12px 4px}code{font-family:ui-monospace,Menlo,monospace}#copy-status{min-height:1.8em}.step{color:#168cb2;font-weight:700;margin-right:10px}@media(max-width:600px){main{padding:28px 16px}h1{font-size:29px}section{padding:20px}pre{font-size:13px}}
+</style></head><body><main>
+<p class="eyebrow">请先看完下方指南，再决定是否在终端运行命令。</p>
+<h1>沃尔翻译官<br>Mac 首次运行指南</h1>
+<p class="intro">先核对下载，再处理系统提示。</p>
+<p class="note">当前版本未取得 Developer ID 签名及 Apple 公证。不是所有人都需要运行终端命令；成功后无需重复。</p>
+<section><h2><span class="step">01</span>核对来源与 SHA-256</h2>
+<ol><li>只从<a href="https://github.com/blueaaa333/woer-translator/releases/latest">本项目 GitHub Releases</a>下载。Apple 芯片选择 arm64，Intel 选择 x64。</li>
+<li>打开“终端”，输入 <code>shasum -a 256 </code>（末尾保留空格），把下载的 DMG / PKG 拖入终端，按回车。</li>
+<li>将输出的 64 位值与同一 Release 的 <code>SHA256SUMS.txt</code> 对应文件逐字比较。不一致请停止并重新下载。校验一致不等于 Apple 安全认证。</li>
+<li>把 <code>WoerTranslator.app</code> 安装到“应用程序”。默认路径为 <code>/Applications/WoerTranslator.app</code>。</li></ol></section>
+<section><h2><span class="step">02</span>根据提示选择处理方式</h2>
+<p><strong>“无法验证开发者 / 无法检查恶意软件”：</strong>确认来源可信且文件未遭修改后，先尝试打开 App，再到<strong>系统设置 → 隐私与安全性 → 仍要打开</strong>，阅读并确认系统提示。具体文字随系统版本变化。</p>
+<p><strong>“App 已损坏”：</strong>也可能是下载损坏、签名异常或文件被修改。先重新下载并核对校验值，仍有问题请反馈。</p>
+<p class="warning"><strong>“将损坏你的电脑 / 检测到恶意软件 / 已移到废纸篓”：</strong>请停止运行，不要用下方命令跳过警告。</p>
+<p class="note">依据：<a href="https://support.apple.com/zh-cn/102445">Apple：在 Mac 上安全地打开 App</a>。这些提示不能一概解释为“没有缴纳开发者费用”。</p></section>
+<section><h2><span class="step">03</span>可选终端操作</h2>
+<p>仅在确认可信、确为隔离拦截时使用。先退出 App，再打开“终端”。下面的一整行只针对这一份 App：</p>
+<pre id="command">sudo xattr -rd com.apple.quarantine "/Applications/WoerTranslator.app"</pre>
+<p class="note">此命令请求管理员权限，移除 App 内部的下载隔离标记，会改变这一份 App 的首次运行检查行为。它不修复文件、不提供公证，也不关闭系统整体保护。输入 Mac 本机密码时不显示字符是正常现象。</p>
+<label><input id="verified" type="checkbox">我已从本项目 Release 下载并核对 SHA-256，确认来源可信，且不是系统恶意软件警告。</label>
+<button id="copy" disabled type="button">复制命令（不会自动执行）</button><p id="copy-status" role="status" class="note"></p>
+<ul><li>成功时通常没有输出，再打开一次 App 即可。不需要运行第二次。</li><li><code>No such file or directory</code>：检查安装路径和名称。自行改名或移动过 App 时，使用实际路径，并保留英文双引号。</li><li>出现权限或其他错误请记录并反馈。不要反复执行，不要把路径扩大为整个应用程序、下载或系统目录，也不要关闭系统保护。</li></ul></section>
+<section><h2>打开后：按需开启划词</h2><p>右上角“···”可重新打开本指南。划词需要辅助功能和输入监控权限；未授权仍可手动输入或主动复制查询。自动朗读默认关闭。</p><p>本指南、复制按钮和 App 均不会自动执行上述命令或自动获取管理员权限。</p></section>
+<footer>沃尔翻译官 · Mac 预览版<br><a href="https://github.com/blueaaa333/woer-translator/issues">提交问题与错误提示</a> · <a href="https://github.com/blueaaa333/woer-translator/blob/main/docs/PRIVACY.md">隐私说明</a></footer>
+</main><script>
+'use strict';const checkbox=document.getElementById('verified'),button=document.getElementById('copy'),status=document.getElementById('copy-status');checkbox.addEventListener('change',()=>{button.disabled=!checkbox.checked;status.textContent='';});button.addEventListener('click',async()=>{if(!checkbox.checked)return;const command=document.getElementById('command').textContent;try{await navigator.clipboard.writeText(command);status.textContent='已复制。请自行打开终端、核对路径后运行一次。';}catch{const range=document.createRange();range.selectNodeContents(document.getElementById('command'));const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);status.textContent='浏览器未允许自动复制，已选中命令；请按 ⌘C 复制。';}});
+</script></body></html>

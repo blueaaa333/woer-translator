@@ -9,3 +9,13 @@
 局部修订提示词：移除左下角的操作系统图形标识，保留纯文字 Windows 桌面查词工具及其他排版。
 
 生成内容不作独创性、排他版权或商标注册保证。文字中的 Windows 仅描述适用平台，不表示相关公司赞助。
+# Mac first-run poster (2026-10-25)
+
+`mac-first-run-poster.png` was generated with the built-in imagegen tool for this
+project, using `assets/沃尔翻译官.png` as the supporting icon reference. The icon's
+Lucide ISC attribution remains applicable. The poster is an illustration, not an
+Apple screenshot or endorsement. The checked command is limited to the installed
+`/Applications/WoerTranslator.app`; it is presented as an optional manual action
+after checking the source and file integrity, not as mandatory installation or a
+repair for genuine damage. Full generation prompt: `MAC_POSTER_PROMPT.txt`.
+
