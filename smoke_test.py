@@ -9,6 +9,7 @@ def run(base):
     assert lexicon.lookup('current')['community']
     for name in ('brand-18.png','沃尔翻译官.png'):assert (base/'assets'/name).is_file()
     assert (base/'licenses'/'WordNet-LICENSE.txt').is_file()
+    assert (base/'docs'/'MAC_FIRST_RUN.html').is_file()
     if sys.platform=='win32':assert (base/'DesktopBridge.exe').is_file()
     elif sys.platform=='darwin':
         import AppKit,Quartz,ApplicationServices

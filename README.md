@@ -16,6 +16,8 @@
 
 [下载桌面安装包](https://github.com/blueaaa333/woer-translator/releases/latest)：Windows x64 安装器 / 便携版，Mac Apple 芯片 / Intel 的 DMG 与 PKG。安装包内置解释器和公开词库，不需另装 Python。具体限制见 [发行说明](docs/RELEASE_NOTES.md)。
 
+**Mac 用户先看 [首次运行指南与海报](docs/MAC_FIRST_RUN.md)**：先核对 SHA-256，再按提示类型处理。DMG 内附有可离线阅读的 HTML 指南；App 第一次成功打开也会显示引导，并可从“···”菜单重新查看。终端命令是确认可信后的可选操作，不能修复真正损坏的文件，也不需要重复运行。
+
 Windows 10/11；Mac 在 macOS 15 构建检查。Mac 是首个预览版本，尚未完成实体 Mac 上所有浏览器的人工验收。Windows 安装器未作商业签名，Mac 未作 Developer ID 签名及 Apple 公证。Mac 划词需在“系统设置 → 隐私与安全”允许辅助功能及输入监控；在“···”菜单中主动发起授权。未授权可手动或复制查询。扫描型 PDF 没有文字选区，不能直接划词。
 
 Windows 安装包可从“··· → 下载英美离线语音”按需安装声音；Mac 使用系统本地英美语音，缺少某口音时会提示从系统设置下载。[Packages](https://github.com/blueaaa333/woer-translator/packages) 提供 npm 下载与校验工具，普通用户直接下载安装包即可。

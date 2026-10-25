@@ -209,6 +209,23 @@ class App:
   self.root.bind('<Destroy>',lambda e:self.shutdown() if e.widget is self.root else None)
   self.root.after(25,self.poll)
   if not testing:self.root.after(180,self.warm_toolbar)
+  if not IS_WINDOWS and not testing and not self.preferences.get('mac_guide_seen',False):self.root.after(600,self.mac_welcome)
+ def open_mac_guide(self):
+  import webbrowser
+  guide=BASE/'docs'/'MAC_FIRST_RUN.html'
+  webbrowser.open(guide.resolve().as_uri() if guide.is_file() else 'https://github.com/blueaaa333/woer-translator/blob/main/docs/MAC_FIRST_RUN.md')
+ def mac_welcome(self):
+  if getattr(self,'welcome_popup',None) and self.welcome_popup.winfo_exists():self.welcome_popup.lift();return
+  popup=self.welcome_popup=tk.Toplevel(self.root);popup.title('Mac 首次运行指南');popup.configure(bg='white');popup.transient(self.root)
+  body=tk.Frame(popup,bg='white',padx=24,pady=20);body.pack(fill='both',expand=True)
+  tk.Label(body,text='欢迎使用沃尔翻译官',font=(UI_FONT,16,'bold'),bg='white',fg='#183d50',anchor='w').pack(fill='x',pady=(0,12))
+  tk.Label(body,text='完整指南可随时从右上角「···」重新打开。\n\n本版本尚未取得 Apple 公证。遇到首次打开拦截时，请先核对下载来源与 SHA-256，再按指南处理；并不是每个人都需要运行终端命令。\n\n划词需要在系统设置中允许辅助功能与输入监控，未授权也可手动输入或主动复制查询。',wraplength=350,justify='left',bg='white',fg='#405f70',font=(UI_FONT,11)).pack(fill='x',pady=(0,14))
+  self.button(body,'阅读完整首次运行指南 ↗',self.open_mac_guide,small=True).pack(anchor='w',pady=8)
+  def done():
+   if not self.testing:self.preferences['mac_guide_seen']=True;self.save_preferences()
+   popup.destroy()
+  self.button(body,'开始查词',done).pack(anchor='e',pady=(8,0));popup.protocol('WM_DELETE_WINDOW',done)
+  popup.update_idletasks();popup.geometry(f'+{max(20,self.root.winfo_x()+15)}+{max(40,self.root.winfo_y()+15)}')
  def on_error(self,exc,value,tb):
   write_error('interface',exc,value,tb)
   try:self.status.config(text='操作未完成，错误已记录')
@@ -295,7 +312,7 @@ class App:
    return data
   except (OSError,ValueError,AttributeError):return {'accent':0}
  def save_preferences(self):
-  data=dict(accent=self.accent,preferred_accent=self.preferred_accent,selection=self.selection.get(),copy_prompt=self.auto.get())
+  data=dict(accent=self.accent,preferred_accent=self.preferred_accent,selection=self.selection.get(),copy_prompt=self.auto.get(),mac_guide_seen=bool(self.preferences.get('mac_guide_seen',False)))
   (DATA/'preferences.json').write_text(json.dumps(data),encoding='utf-8')
  def set_accent(self,accent):
   self.accent=accent
@@ -362,7 +379,9 @@ class App:
    button.bind('<Enter>',lambda e:paint_accents());button.bind('<Leave>',lambda e:paint_accents())
   paint_accents()
   if IS_WINDOWS:self.button(f,'下载英美离线语音（约150 MB）',self.install_voices,small=True).pack(anchor='w',pady=5)
-  else:self.button(f,'启用 macOS 划词权限',lambda:mac.request_permissions(events),small=True).pack(anchor='w',pady=5)
+  else:
+   self.button(f,'Mac 首次运行指南 ↗',self.open_mac_guide,small=True).pack(anchor='w',pady=5)
+   self.button(f,'启用 macOS 划词权限',lambda:mac.request_permissions(events),small=True).pack(anchor='w',pady=5)
   tk.Frame(f,bg='#edf1f4',height=1).pack(fill='x',pady=(3,7))
   quit=self.button(f,'退出应用',self.root.destroy,small=True);quit.config(fg='#8d6669');quit.pack(anchor='w')
   m.update_idletasks();self.settings_size=(max(round(258*self.scale),f.winfo_reqwidth()+2),f.winfo_reqheight()+2)
