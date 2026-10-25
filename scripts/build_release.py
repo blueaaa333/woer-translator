@@ -54,8 +54,10 @@ def build(skip_installer=False):
         shutil.copytree(app,dmg_stage/'WoerTranslator.app',dirs_exist_ok=True)
         shutil.copy2(ROOT/'docs'/'MAC_FIRST_RUN.html',dmg_stage/'Mac首次运行指南.html')
         shutil.copy2(ROOT/'docs'/'mac-first-run-poster.png',dmg_stage/'Mac首次运行海报.png')
-        shutil.copy2(ROOT/'docs'/'MAC_FIRST_RUN.html',out/f'WoerTranslator-{version}-Mac首次运行指南.html')
-        shutil.copy2(ROOT/'docs'/'mac-first-run-poster.png',out/f'WoerTranslator-{version}-Mac首次运行海报.png')
+        # GitHub normalizes release asset filenames; keep them ASCII so the
+        # published names match SHA256SUMS. In-DMG labels remain Chinese.
+        shutil.copy2(ROOT/'docs'/'MAC_FIRST_RUN.html',out/f'WoerTranslator-{version}-Mac.html')
+        shutil.copy2(ROOT/'docs'/'mac-first-run-poster.png',out/f'WoerTranslator-{version}-Mac.png')
         link=dmg_stage/'Applications'
         if not link.exists():link.symlink_to('/Applications')
         command('/usr/bin/hdiutil','create','-volname','Woer Translator','-srcfolder',dmg_stage,'-ov','-format','UDZO',out/f'WoerTranslator-{version}-macOS-{arch}.dmg')
