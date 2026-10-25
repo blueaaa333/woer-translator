@@ -22,5 +22,9 @@ try:
     assert app.popup.winfo_ismapped()
     app.close_floating();app.root.update()
     assert not app.popup.winfo_exists()
+    if sys.platform=='darwin':
+        app.mac_welcome();app.root.update()
+        assert app.welcome_popup.winfo_exists()
+        app.welcome_popup.destroy()
     print(json.dumps({'platform':sys.platform,'gui':'ok','lookup':'ok','anchored_settings':'ok','toolbar':'ok'}))
 finally:app.root.destroy()

@@ -30,6 +30,7 @@ def build(skip_installer=False):
     for directory in ('assets','licenses'):
         index=args.index(f'{ROOT/directory}{os.pathsep}.');args[index]=f'{ROOT/directory}{os.pathsep}{directory}'
     args+=['--add-data',f'{stage/"runtime-licenses"}{os.pathsep}licenses/runtime','--add-data',f'{stage/"build-info.json"}{os.pathsep}.',
+           '--add-data',f'{ROOT/"docs"/"MAC_FIRST_RUN.html"}{os.pathsep}docs',
            '--add-data',f'{ROOT/"scripts"/"speech-downloads.json"}{os.pathsep}scripts','--hidden-import','scripts.setup_speech']
     if sys.platform=='win32':args+=['--manifest',str(ROOT/'QingCi.manifest'),'--add-binary',f'{ROOT/"DesktopBridge.exe"}{os.pathsep}.']
     else:args+=['--osx-bundle-identifier','io.github.blueaaa333.woer-translator','--hidden-import','mac_platform','--hidden-import','ApplicationServices','--hidden-import','Quartz','--hidden-import','AppKit']
@@ -51,6 +52,10 @@ def build(skip_installer=False):
         command('/usr/bin/codesign','--verify','--deep','--strict',app)
         dmg_stage=ROOT/'build'/'dmg';dmg_stage.mkdir(exist_ok=True)
         shutil.copytree(app,dmg_stage/'WoerTranslator.app',dirs_exist_ok=True)
+        shutil.copy2(ROOT/'docs'/'MAC_FIRST_RUN.html',dmg_stage/'Mac首次运行指南.html')
+        shutil.copy2(ROOT/'docs'/'mac-first-run-poster.png',dmg_stage/'Mac首次运行海报.png')
+        shutil.copy2(ROOT/'docs'/'MAC_FIRST_RUN.html',out/f'WoerTranslator-{version}-Mac首次运行指南.html')
+        shutil.copy2(ROOT/'docs'/'mac-first-run-poster.png',out/f'WoerTranslator-{version}-Mac首次运行海报.png')
         link=dmg_stage/'Applications'
         if not link.exists():link.symlink_to('/Applications')
         command('/usr/bin/hdiutil','create','-volname','Woer Translator','-srcfolder',dmg_stage,'-ov','-format','UDZO',out/f'WoerTranslator-{version}-macOS-{arch}.dmg')
