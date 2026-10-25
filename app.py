@@ -151,6 +151,8 @@ class App:
   self.speech=SpeechEngine(BASE,DATA/'speech-cache',user_root=DATA/'speech')
   self.preference_store=PreferenceStore(DATA/'preferences.json',read_only=testing)
   self.preferences=self.read_preferences();self.settings_popup=None
+  from audio_output import AudioOutput
+  self.player=AudioOutput() if IS_WINDOWS else None
   self.preferred_accent=self.preferences.get('preferred_accent',2)
   self.audio_serial=0;self.audio_lock=threading.Lock();self.accent=self.preferences.get('accent',0);self.last_prompt='';self.last_prompt_time=0;self.pending_source=None;self.clipboard_suppress_until=0;self.selection_version=0
   self.root=tk.Tk();self.root.title('沃尔翻译官');self.dpi=u.GetDpiForSystem() if IS_WINDOWS and hasattr(u,'GetDpiForSystem') else 96;self.scale=self.dpi/96;
@@ -256,7 +258,7 @@ class App:
   self.audio_serial+=1
   self.speech.close()
   if not self.testing:stop_children()
-  winsound.PlaySound(None,0)
+  self.player.stop() if self.player else winsound.PlaySound(None,0)
  def warm_toolbar(self):
   if self.popup and self.popup.winfo_exists():return
   self._warming=True
@@ -384,6 +386,7 @@ class App:
    self.preferences['prefer_recordings']=not self.preferences.get('prefer_recordings',True);self.save_preferences()
   toggle('优先真人发音（联网）',lambda:self.preferences.get('prefer_recordings',True),recordings_toggle)
   self.button(f,'发音来源与许可 ↗',self.audio_sources,small=True).pack(anchor='w',pady=3)
+  if IS_WINDOWS:self.button(f,'声音检查与输出设备',self.audio_check,small=True).pack(anchor='w',pady=3)
   toggle('查词后自动朗读',lambda:self.accent!=0,lambda:self.set_accent(0 if self.accent else self.preferred_accent))
   row=tk.Frame(f,bg='white');row.pack(fill='x',pady=(5,8))
   tk.Label(row,text='默认口音',bg='white',fg='#7c8d9a',font=(UI_FONT,9)).pack(side='left')
@@ -590,6 +593,9 @@ class App:
   self.show()
   chosen=self.accent if accent is None else accent
   if chosen:self.speak(chosen)
+ def audio_check(self):
+  from audio_settings import show
+  show(self,DATA)
  def audio_sources(self):
   import webbrowser
   path=self.speech.recordings.attribution_path()
@@ -597,7 +603,7 @@ class App:
  def speak(self,accent):
   if not self.word:return
   self.audio_serial+=1;serial=self.audio_serial;word=self.word
-  winsound.PlaySound(None,0)
+  self.player.stop() if self.player else winsound.PlaySound(None,0)
   self.speech.prefer_recordings=self.preferences.get('prefer_recordings',True)
   self.status.config(text='正在准备'+('英式' if accent==1 else '美式')+'发音…')
   def job():
@@ -606,10 +612,13 @@ class App:
      if serial!=self.audio_serial:return
      audio=self.speech.render(word,accent)
      if serial!=self.audio_serial:return
-     winsound.PlaySound(str(audio),winsound.SND_FILENAME)
-     if serial==self.audio_serial:events.put(('status',('英式' if accent==1 else '美式')+('真人发音 · 点击查看来源' if self.speech.last_source else '合成发音 · 播放完毕')))
+     if self.player:
+      played=self.player.play(audio,device_name=self.preferences.get('audio_device',''),legacy=self.preferences.get('legacy_audio',False),cancelled=lambda:serial!=self.audio_serial)
+      if not played:return
+     else:winsound.PlaySound(str(audio),winsound.SND_FILENAME)
+     if serial==self.audio_serial:events.put(('status',('英式' if accent==1 else '美式')+('真人发音 · 已输出，点击查看来源' if self.speech.last_source else '合成发音 · 已输出，没声音可检查设置')))
    except Exception as exc:
-    if serial==self.audio_serial:events.put(('status',str(exc) if isinstance(exc,SpeechUnavailable) else '发音未能播放，请检查语音设置'))
+    if serial==self.audio_serial:events.put(('status',str(exc) if isinstance(exc,SpeechUnavailable) else '发音输出失败，请在···打开声音检查'))
   threading.Thread(target=job,daemon=True).start()
  def install_voices(self):
   if getattr(self,'voice_installing',False):return

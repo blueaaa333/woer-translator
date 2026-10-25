@@ -31,6 +31,16 @@ try:
     assert app.updates.action.cget('text')=='下载更新'
     assert app.updates.action.winfo_rooty()+app.updates.action.winfo_height()<=app.updates.window.winfo_rooty()+app.updates.window.winfo_height()
     app.updates.window.destroy()
+    if sys.platform=='win32':
+        from unittest.mock import patch
+        import time
+        with patch.object(app.player,'devices',return_value=[dict(name='Test speakers',id=None,default=True)]):
+            app.audio_check();app.root.update()
+            for _ in range(15):app.root.update();time.sleep(.01)
+        from menu_layout_checks import descendants
+        labels=[w.cget('text') for w in descendants(app.audio_window) if w.winfo_class()=='Button']
+        assert '播放测试音' in labels and '复制声音检查信息' in labels
+        app.audio_window.destroy()
     if sys.platform=='darwin':
         app.mac_welcome();app.root.update()
         assert app.welcome_popup.winfo_exists()
