@@ -1,5 +1,5 @@
 """Build only on the target OS. No personal data or optional speech binaries."""
-import argparse,json,os,platform,shutil,subprocess,sys,plistlib
+import argparse,json,os,platform,shutil,subprocess,sys,plistlib,tempfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
@@ -64,8 +64,9 @@ def build(skip_installer=False):
         # A local ad-hoc signature is not a Developer ID signature or notarization.
         command('/usr/bin/codesign','--force','--deep','--sign','-',app)
         command('/usr/bin/codesign','--verify','--deep','--strict',app)
-        dmg_stage=ROOT/'build'/'dmg';dmg_stage.mkdir(exist_ok=True)
-        shutil.copytree(app,dmg_stage/'WoerTranslator.app',dirs_exist_ok=True)
+        dmg_stage=Path(tempfile.mkdtemp(prefix='dmg-',dir=ROOT/'build'))
+        shutil.copytree(app,dmg_stage/'WoerTranslator.app',symlinks=True)
+        command('/usr/bin/codesign','--verify','--deep','--strict',dmg_stage/'WoerTranslator.app')
         shutil.copy2(ROOT/'docs'/'MAC_FIRST_RUN.html',dmg_stage/'Mac首次运行指南.html')
         shutil.copy2(ROOT/'docs'/'mac-first-run-poster.png',dmg_stage/'Mac首次运行海报.png')
         # GitHub normalizes release asset filenames; keep them ASCII so the

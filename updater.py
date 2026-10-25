@@ -203,8 +203,10 @@ def validate_bundle(app, expected_version=None):
         raise UpdateError('安装包中的应用标识不匹配')
     if expected_version and info.get('CFBundleShortVersionString') != expected_version:
         raise UpdateError('安装包中的应用版本不匹配')
-    subprocess.run(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(app)],
-                   check=True, timeout=45, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    result = subprocess.run(['/usr/bin/codesign', '--verify', '--deep', '--strict', str(app)],
+                            timeout=45, capture_output=True)
+    if result.returncode:
+        raise UpdateError('安装包中的应用未通过签名完整性检查，已停止更新')
 
 
 def validate_target(target, test_root=None):
