@@ -4,7 +4,7 @@
 
 ![Mac 首次运行海报](https://raw.githubusercontent.com/blueaaa333/woer-translator/main/docs/mac-first-run-poster.png)
 
-Release 附带可下载的 `Mac首次运行指南.html` 与海报；DMG 内也包含这两份说明。首次成功打开后的引导可从右上角“··· → Mac 首次运行指南”重新查看。
+Release 附带可下载的 HTML 指南（文件名以 `-Mac.html` 结尾）与海报（`-Mac.png`）；DMG 内也包含这两份中文命名的说明。首次成功打开后的引导可从右上角“··· → Mac 首次运行指南”重新查看。
 
 ### 下载选择
 
