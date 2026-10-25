@@ -20,6 +20,7 @@ class MacBridge:
         self.sequence, self.text, self.screens = 0, '', []
         self.ready = threading.Event()
         self.test_resumed = threading.Event()
+        self.test_pause_started = None
         self.permissions = {}
         self.process = None
 
@@ -58,6 +59,8 @@ class MacBridge:
                 self.permissions = message['value']
         elif kind == 'self_test_resumed':
             self.test_resumed.set()
+        elif kind == 'self_test_started':
+            self.test_pause_started = time.monotonic()
         elif kind == 'gesture':
             if self.enabled.is_set():
                 self.events.put((kind, message['value']))

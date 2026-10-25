@@ -198,6 +198,7 @@ def run():
                     elif command['kind'] == 'regions':
                         regions = command['regions']
                     elif command['kind'] == 'self_test_pause' and '--native-self-test' in sys.argv:
+                        emit('self_test_started')
                         time.sleep(2)
                         emit('self_test_resumed')
                     elif command['kind'] == 'query':

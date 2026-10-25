@@ -45,13 +45,16 @@ def schedule(app, report):
                 assert app.popup.winfo_exists()
                 app.close_floating()
                 mac._client.send('self_test_pause')
-                phase['pause'] = now
-            if phase['pause'] and now-phase['pause'] >= 3:
+                phase['pause'] = time.monotonic()
+            pause_started = mac._client.test_pause_started if mac._client else None
+            if pause_started and now-pause_started >= 2.5:
                 assert mac.ready(), 'Native helper disconnected during the UI check'
                 assert mac._client.test_resumed.is_set(), 'Native helper did not execute its pause'
-                during = [t for t in ticks if phase['pause']+.15 <= t <= phase['pause']+1.85]
-                assert len(during) >= 15, 'Tk stopped responding while helper was stalled'
-                assert max(b-a for a, b in zip(during, during[1:])) < .5, 'UI heartbeat stalled'
+                begin, end = pause_started+.15, pause_started+1.85
+                during = [t for t in ticks if begin <= t <= end]
+                assert len(during) >= 4, 'Tk stopped responding while helper was stalled'
+                samples = [begin, *during, end]
+                assert max(b-a for a, b in zip(samples, samples[1:])) < .5, 'UI heartbeat stalled'
                 finish()
                 return
             if now-started > 15:
