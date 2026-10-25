@@ -1,0 +1,34 @@
+name: Verify published asset checksums
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/release-checksums.yml]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to verify
+        required: true
+        default: v0.2.1
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Match checksums to actual published filenames
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || 'v0.2.1' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" > release.json
+          jq -e '(.assets | length > 1) and all(.assets[] | select(.name != "SHA256SUMS.txt"); (.digest | test("^sha256:[a-f0-9]{64}$")) and (.name | test("^[A-Za-z0-9._-]+$")))' release.json
+          jq -r '.assets | sort_by(.name)[] | select(.name != "SHA256SUMS.txt") | "\(.digest | sub("^sha256:"; ""))  \(.name)"' release.json > SHA256SUMS.txt
+          gh release upload "$RELEASE_TAG" SHA256SUMS.txt --clobber
+          mkdir verified
+          gh release download "$RELEASE_TAG" --pattern SHA256SUMS.txt --dir verified
+          cmp SHA256SUMS.txt verified/SHA256SUMS.txt
+          cat SHA256SUMS.txt
