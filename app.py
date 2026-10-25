@@ -210,6 +210,7 @@ class App:
   self.more=self.button(f,'补充释义与来源  ▾',self.toggle_details,small=True);self.more.config(font=(UI_FONT,9),fg='#718b9b')
   bottom=self.bottom=tk.Frame(f,bg='white');bottom.pack(fill='x')
   self.status=tk.Label(bottom,text='选中单词后，点击查词' if IS_WINDOWS else '正在准备 Mac 划词服务，可先手动查词…',bg='white',fg='#6c8692',font=(UI_FONT,8),anchor='w',width=30);self.status.pack(side='left',fill='x',expand=True)
+  self.status.bind('<Button-1>',lambda event:self.audio_sources() if self.speech.last_source else None)
   source_button=self.button(bottom,'来源 ↗',self.source_link,small=True);source_button.config(font=(UI_FONT,9),fg='#8599a5');source_button.pack(side='right')
   self.settext('选中英文，点击「查词」。\n\n完整离线释义，不调用第三方私有接口。')
   self.select_tab('definition')
@@ -379,6 +380,10 @@ class App:
   toggle('复制后显示浮条',self.auto.get,lambda:self.auto.set(not self.auto.get()))
   tk.Frame(f,bg='#edf1f4',height=1).pack(fill='x',pady=(10,2))
   section('发音偏好')
+  def recordings_toggle():
+   self.preferences['prefer_recordings']=not self.preferences.get('prefer_recordings',True);self.save_preferences()
+  toggle('优先真人发音（联网）',lambda:self.preferences.get('prefer_recordings',True),recordings_toggle)
+  self.button(f,'发音来源与许可 ↗',self.audio_sources,small=True).pack(anchor='w',pady=3)
   toggle('查词后自动朗读',lambda:self.accent!=0,lambda:self.set_accent(0 if self.accent else self.preferred_accent))
   row=tk.Frame(f,bg='white');row.pack(fill='x',pady=(5,8))
   tk.Label(row,text='默认口音',bg='white',fg='#7c8d9a',font=(UI_FONT,9)).pack(side='left')
@@ -585,11 +590,16 @@ class App:
   self.show()
   chosen=self.accent if accent is None else accent
   if chosen:self.speak(chosen)
+ def audio_sources(self):
+  import webbrowser
+  path=self.speech.recordings.attribution_path()
+  webbrowser.open(path.resolve().as_uri() if path.is_file() else 'https://github.com/blueaaa333/woer-translator/blob/main/docs/SPEECH.md')
  def speak(self,accent):
   if not self.word:return
   self.audio_serial+=1;serial=self.audio_serial;word=self.word
   winsound.PlaySound(None,0)
-  self.status.config(text='正在准备'+('英式' if accent==1 else '美式')+'离线发音…')
+  self.speech.prefer_recordings=self.preferences.get('prefer_recordings',True)
+  self.status.config(text='正在准备'+('英式' if accent==1 else '美式')+'发音…')
   def job():
    try:
     with self.audio_lock:
@@ -597,7 +607,7 @@ class App:
      audio=self.speech.render(word,accent)
      if serial!=self.audio_serial:return
      winsound.PlaySound(str(audio),winsound.SND_FILENAME)
-     if serial==self.audio_serial:events.put(('status',('英式' if accent==1 else '美式')+'离线发音 · 播放完毕'))
+     if serial==self.audio_serial:events.put(('status',('英式' if accent==1 else '美式')+('真人发音 · 点击查看来源' if self.speech.last_source else '合成发音 · 播放完毕')))
    except Exception as exc:
     if serial==self.audio_serial:events.put(('status',str(exc) if isinstance(exc,SpeechUnavailable) else '发音未能播放，请检查语音设置'))
   threading.Thread(target=job,daemon=True).start()

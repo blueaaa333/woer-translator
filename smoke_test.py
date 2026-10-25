@@ -5,6 +5,8 @@ from lexicon import Lexicon,definition_sections
 
 def run(base):
     import certifi
+    from recording_checks import exercise
+    audio=exercise()
     assert Path(certifi.where()).is_file()
     base=Path(base);lexicon=Lexicon(base)
     assert '经过充分研究' in definition_sections(lexicon.lookup('well-researched'))['primary'][0]['text']
@@ -21,4 +23,4 @@ def run(base):
     for name in ('db','extra','community','exam'):
         connection=getattr(lexicon,name)
         if connection:connection.close()
-    return dict(platform=sys.platform,dictionaries='ok',assets='ok',native_imports='ok')
+    return dict(platform=sys.platform,dictionaries='ok',assets='ok',native_imports='ok',audio=audio)

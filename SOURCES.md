@@ -47,3 +47,7 @@ python scripts/prepare_data.py
 ## Not included
 
 ECDICT, exam PDFs, PDF-derived entries, legacy private API integrations, browser screenshots containing third-party documents, personal vocabulary lists, settings, logs, audio caches, credentials, Piper runtime binaries and voice weights are absent. Desktop installers contain only the separately documented runtime dependencies, not the user's existing installation folder.
+
+## Optional human pronunciation (v0.3.3)
+
+Recordings are fetched from Wikimedia Commons only after checking the exact word/accent filename and each file's author, reusable Creative Commons licence URL, restrictions, size, duration and SHA-1. Audio is not part of this repository or installers. User-local caches preserve original files, PCM conversions and per-file attribution; CC BY-SA recordings retain their source licence. See [speech sources and terms](docs/SPEECH.md). The decoder is [miniaudio 1.71](https://pypi.org/project/miniaudio/1.71/), with its exact package and dependency notices collected at build time.

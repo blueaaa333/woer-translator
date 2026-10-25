@@ -40,3 +40,6 @@ finally:app.root.destroy()
 
 from preference_checks import exercise as check_preferences
 print(json.dumps({'preferences':check_preferences(App)}))
+
+from recording_checks import exercise as check_decoder
+print(json.dumps({'audio':check_decoder()}))

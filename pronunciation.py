@@ -1,6 +1,7 @@
 import atexit,hashlib,json,os,subprocess,threading,wave,queue,time,sys,platform
 from pathlib import Path
 from lexicon import normalize_query,valid_query
+from recorded_audio import Recordings
 
 def phonetic_labels(result):
     target=normalize_query(result['word']).replace(' ','-').lower()
@@ -32,12 +33,20 @@ class SpeechEngine:
     def __init__(self,base,cache,user_root=None):
         self.root=Path(user_root) if user_root else Path(base)/'speech';self.cache=Path(cache)
         if not (self.root/'voices').exists() and (Path(base)/'speech'/'voices').exists():self.root=Path(base)/'speech'
+        self.recordings=Recordings(self.cache/'recordings');self.prefer_recordings=True;self.last_source=None
         self.processes=set();self.servers={};self.lock=threading.RLock();self.closed=threading.Event()
         atexit.register(self.close);threading.Thread(target=self.reap,daemon=True).start()
     def render(self,word,accent):
         if self.closed.is_set():raise RuntimeError('Speech engine closed')
         word=normalize_query(word)
         if accent not in (1,2) or not valid_query(word):raise ValueError('Invalid speech request')
+        self.last_source=None
+        if self.prefer_recordings:
+            audio=self.recordings.get(word,accent)
+            if self.closed.is_set():raise RuntimeError('Speech engine closed')
+            if audio:
+                self.last_source=self.recordings.last
+                return audio
         if sys.platform=='darwin':return self.render_system_voice(word,accent)
         folder=self.root/'voices'/('uk' if accent==1 else 'us')
         model=folder/'voice.onnx';config_path=folder/'voice.onnx.json'

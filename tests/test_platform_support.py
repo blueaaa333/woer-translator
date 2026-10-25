@@ -17,6 +17,10 @@ class PlatformSupportTests(unittest.TestCase):
                 with patch('pronunciation.subprocess.check_output',return_value='Alex en_US # test'):
                     with self.assertRaisesRegex(SpeechUnavailable,'系统缺少英式语音'):engine.render_system_voice('current',1)
             finally:engine.close()
+    def test_local_voice_prefers_available_enhanced_voice_with_exact_locale(self):
+        catalog='Alex en_US # test\nSamantha en_US # test\nDaniel en_GB # test\nSerena (Enhanced) en_GB # test\nKaren (Premium) en_AU # test'
+        self.assertEqual(choose_voice(catalog,1),'Serena (Enhanced)')
+        self.assertEqual(choose_voice(catalog,2),'Samantha')
     def test_resources_and_user_data_separate(self):
         import app_paths
         with patch('sys.platform','darwin'),patch.object(Path,'home',return_value=Path('/example')):

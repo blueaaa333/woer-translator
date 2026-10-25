@@ -1,10 +1,26 @@
-# 本地英美语音
+# 英美真人录音与本地合成语音
 
-## macOS
+## 优先真人录音（Windows / macOS）
 
-Mac 版使用系统自带 `/usr/bin/say` 和 `/usr/bin/afplay`，按语言区域选择 `en_GB` 与 `en_US` 声音，不分发 Apple 语音资源。缺少某口音时，会提示在系统设置的辅助功能朗读声音中下载，不会用另一个口音冒充。系统设置中的具体名称会随 macOS 版本变化。声音与 AIFF/WAV 缓存均在本机处理。
+v0.3.3 起，默认优先从 Wikimedia Commons 获取带明确 `En-uk` / `En-gb` 或 `En-us` 文件名的逐词真人录音。只接受逐文件可核验的 CC BY、CC BY-SA 或 CC0 许可；缺作者、许可链接、口音标记、文件校验值，或带有额外限制的录音均跳过。不是所有词都有两种口音的录音，多音词、专名和复合词也可能缺少合适读法；此时回退到本地合成，并显示“合成发音”，不把一个口音用于两个按钮。
 
-## Windows
+首次播放时会发送当前查询词给 Commons API，按需下载单词录音，不下载整套音频库。缓存后再次播放同一词和口音无需联网。“··· → 优先真人发音（联网）”可关闭；自动朗读开启时，查词会触发相同的录音获取流程。网络错误有短暂退避，网络请求、解码、播放均在后台进行，界面不等待。
+
+每条音频保留作者、原文件页、许可链接、原始文件 SHA-1、缓存 WAV 的 SHA-256 和改动说明。原始录音与转码 WAV 保存在用户缓存的 `speech-cache/recordings` 中；“··· → 发音来源与许可”或真人发音播放完成后的状态文字可打开本地署名页。只转换为 16 位 PCM WAV，保留正常语速、音高和完整内容；不做变速、变调或裁剪。转码音频按原许可提供，CC BY-SA 录音及其转换文件继续采用相同许可，不适用应用代码的 MIT 许可；分享音频时须携带对应署名、来源、许可和改动说明。源码与安装包不附带这些录音或个人缓存。
+
+例如 `water` 的英音来自 Association Shtooka / Judith Franck（[原页](https://commons.wikimedia.org/wiki/File:En-uk-water.ogg)，CC BY 3.0 us），美音来自 Dvortygirl（[原页](https://commons.wikimedia.org/wiki/File:En-us-water.ogg)，CC BY-SA 3.0）。这是两个独立录音，不是对同一音频调整音高。
+
+解码使用 miniaudio 1.71 Python 包，包内许可覆盖绑定、miniaudio 和 stb_vorbis；运行安装包保留 MIT 原文和 CFFI / pycparser 的对应许可。没有抓取商业词典私有音频接口，也没有把“网页可播放”视作转载授权。许可核验依据上游逐文件声明，不代表对所有上传者权利作绝对保证；发现问题可提交文件页和单词以便排除。
+
+- [Commons 复用说明](https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia)
+- [MediaWiki imageinfo 元数据接口](https://www.mediawiki.org/wiki/API:Imageinfo)
+- [miniaudio Python 项目](https://github.com/irmen/pyminiaudio)
+
+## macOS 本地回退
+
+Mac 版使用系统自带 `/usr/bin/say` 和 `/usr/bin/afplay`，按语言区域选择 `en_GB` 与 `en_US` 声音；优先选择目录中标记 Premium / Enhanced 的已安装声音，否则优先匹配常规的 Daniel / Samantha 等声音，不分发 Apple 语音资源。缺少某口音时，会提示在系统设置的辅助功能朗读声音中下载，不会用另一个口音冒充。系统设置中的具体名称会随 macOS 版本变化。声音与 AIFF/WAV 缓存均在本机处理。
+
+## Windows 本地回退
 
 英式使用 `en_GB-cori-medium`，美式使用 `en_US-ljspeech-medium`；两个按钮调用不同模型。它们是本机合成语音，不能保证所有专名、多音词或上下文中的重音都准确。
 
@@ -21,4 +37,4 @@ Mac 版使用系统自带 `/usr/bin/say` 和 `/usr/bin/afplay`，按语言区域
 
 Piper 的开源许可不等于整套第三方依赖都采用 MIT。eSpeak NG 属于 GPL 组件；若未来分发含这些运行组件的安装包，需要针对实际二进制版本提供对应源码、必要构建信息及完整第三方声明。当前核查无法从历史构建的浮动依赖精确追溯全部二进制对应源码，因此本次不重新分发这些运行包。
 
-只在用户主动选择下载时联网。应用默认不自动朗读；可在“···”开启。缓存、首次加载和 90 秒闲置释放行为不会联网。
+上述模型仅在用户主动选择下载时联网；合成过程和闲置释放不联网。真人录音的联网行为见上文。应用默认不自动朗读；可在“···”开启，开关和口音会保存。

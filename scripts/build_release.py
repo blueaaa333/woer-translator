@@ -21,7 +21,7 @@ def build(skip_installer=False):
     icon=ROOT/'assets'/'沃尔翻译官.ico'
     if sys.platform=='darwin':
         icon=stage/'WoerTranslator.icns';Image.open(ROOT/'assets'/'沃尔翻译官.png').convert('RGBA').resize((1024,1024)).save(icon)
-    args=[sys.executable,'-m','PyInstaller','--noconfirm','--clean','--windowed','--name','WoerTranslator','--icon',str(icon),'--collect-all','opencc']
+    args=[sys.executable,'-m','PyInstaller','--noconfirm','--clean','--windowed','--name','WoerTranslator','--icon',str(icon),'--collect-all','opencc','--exclude-module','numpy','--hidden-import','_cffi_backend']
     for name in ('words.db','extended.db','community.db','compound_entries.json','assets','licenses','LICENSE','SOURCES.md','THIRD_PARTY_NOTICES.md','VERSION'):
         path=ROOT/name
         if not path.exists():raise RuntimeError('Missing resource: '+name)

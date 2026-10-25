@@ -10,6 +10,8 @@
 | Wiktionary，经 Wiktextract / Kaikki 提取 | community.db.gz；extended.db.gz 的结构化词形索引 | CC BY-SA 4.0；保留逐词原页 URL、贡献者署名、改动说明和同许可。extended.db.gz 中本项目新增的数据编排按 CC BY-SA 4.0，WordNet/COW 原内容保留原许可 |
 | Lucide languages 图标 | assets/ 下 SVG、改色 PNG、ICO | ISC；保留 Lucide 完整许可及原图，声明改色、圆角背景、栅格化改动 |
 | OpenCC Python 与字典数据 | 源码依赖；安装包内置 | Apache-2.0；保留许可证与来源 NOTICE，版本 0.1.7 |
+| Wikimedia Commons 逐词真人录音 | 按需获取并缓存在用户目录，不随源码或安装包分发 | 逐文件 CC BY / CC BY-SA / CC0；保存作者、原文件页、许可链接、校验值、原始录音和转码说明，缓存内 ATTRIBUTION.html 汇总；音频沿用原许可 |
+| miniaudio 1.71、CFFI 与 pycparser | Ogg/MP3/WAV 解码与运行桥接 | miniaudio 包自带 MIT；CFFI 的 MIT No Attribution 及附带组件声明、pycparser BSD；构建时收集精确版本及源包内完整许可至 licenses/runtime |
 | certifi 与 Mozilla CA 根证书集合 | 更新检查与下载的 HTTPS 验证 | MPL-2.0；未修改上游文件，构建时将精确版本许可全文收集至 licenses/runtime；来源 https://github.com/certifi/python-certifi |
 | Python / Tcl / Tk | 安装包运行组件 | PSF 及 Tcl/Tk 宽松许可；构建时收集精确版本全文至 licenses/runtime，Python 原许可含历史组件声明 |
 | PyObjC | Mac 安装包系统接口桥接 | MIT；构建时保留 pyobjc-core 与各框架分发包的许可原文 |

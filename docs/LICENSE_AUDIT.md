@@ -27,6 +27,12 @@
 
 ## 主要依据
 
+### v0.3.3 真人发音补充核查（2026-10-25）
+
+源码与安装包不分发录音，运行时按需从 Commons 获取。只接受准确词目与英美口音文件名、作者、可复用 CC BY / CC BY-SA / CC0 许可链接及无额外限制的文件；校验原始文件 SHA-1，保留原文件、PCM 转换文件、作者、来源、原许可与改动说明。音频不改为 MIT，CC BY-SA 继续适用于相关音频。许可依据上游声明，不能排除上传者权利瑕疵；支持按具体文件排查与移除。
+
+miniaudio 1.71 的分发包附带绑定、miniaudio、stb_vorbis 的 MIT 许可；构建另外收集精确版本源包和 CFFI、pycparser 的声明。不会调用商业词典的私有发音接口。详见 [语音来源](SPEECH.md)、[Commons 复用规则](https://commons.wikimedia.org/wiki/Commons:Reusing_content_outside_Wikimedia) 和每条缓存的署名页。
+
 - [ECDICT README 的数据历史与 MIT 声明](https://github.com/skywind3000/ECDICT)
 - [WordNet 许可](https://wordnet.princeton.edu/license-and-commercial-use)
 - [Chinese Open Wordnet 许可](https://github.com/omwn/omw-data/blob/main/wns/cow/LICENSE)

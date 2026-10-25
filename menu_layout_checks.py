@@ -63,6 +63,15 @@ def exercise(app):
 
 
 def frozen_check(app_type, report):
+    try:
+        _frozen_check(app_type, report)
+    except Exception:
+        import traceback
+        Path(report).write_text(json.dumps({'error':traceback.format_exc()},ensure_ascii=False,indent=2),encoding='utf-8')
+        raise
+
+
+def _frozen_check(app_type, report):
     app=app_type(testing=True)
     try:
         result=exercise(app)
@@ -71,4 +80,6 @@ def frozen_check(app_type, report):
         app.root.destroy()
     from preference_checks import exercise as check_preferences
     result['preferences']=check_preferences(app_type)
+    from recording_checks import exercise as check_decoder
+    result['audio']=check_decoder()
     Path(report).write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')

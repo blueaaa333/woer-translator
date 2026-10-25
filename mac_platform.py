@@ -59,10 +59,16 @@ def show_error(message):
 
 def choose_voice(lines,accent):
     expected='en_GB' if accent==1 else 'en_US'
+    preferred=('Daniel','Serena','Kate','Oliver') if accent==1 else ('Samantha','Ava','Allison','Zoe','Alex')
+    candidates=[]
     for line in lines.splitlines():
         match=re.match(r'(.+?)\s+(en_[A-Z]{2})\s+#',line)
-        if match and match[2]==expected:return match[1].strip()
-    return None
+        if match and match[2]==expected:
+            name=match[1].strip();base=name.split(' (',1)[0]
+            quality=2 if 'premium' in name.lower() else 1 if 'enhanced' in name.lower() else 0
+            rank=preferred.index(base) if base in preferred else len(preferred)
+            candidates.append((-quality,rank,len(candidates),name))
+    return min(candidates)[-1] if candidates else None
 
 class MacSound:
     SND_FILENAME=0
