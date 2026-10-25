@@ -1,4 +1,8 @@
 import sys
+if __name__=='__main__' and '--apply-mac-update' in sys.argv:
+ from updater import apply_mac
+ apply_mac(sys.argv[sys.argv.index('--apply-mac-update')+1])
+ raise SystemExit
 if __name__=='__main__' and '--mac-bridge' in sys.argv:
  from mac_native import run
  run()
@@ -213,6 +217,9 @@ class App:
   if not testing:
    threading.Thread(target=hotkeys,daemon=True).start();threading.Thread(target=selection_monitor,daemon=True).start()
   self.root.bind('<Destroy>',lambda e:self.shutdown() if e.widget is self.root else None)
+  from update_ui import UpdatePanel
+  self.current_version=(BASE/'VERSION').read_text(encoding='utf-8').strip()
+  self.updates=UpdatePanel(self,events,self.current_version,DATA,testing)
   self.root.after(25,self.poll)
   if not testing:self.root.after(180,self.warm_toolbar)
   if not IS_WINDOWS and not testing and not self.preferences.get('mac_guide_seen',False):self.root.after(600,self.mac_welcome)
@@ -239,6 +246,7 @@ class App:
   try:self.status.config(text='操作未完成，错误已记录')
   except (AttributeError,tk.TclError):pass
  def shutdown(self):
+  if getattr(self,'updates',None):self.updates.close()
   self.audio_serial+=1
   self.speech.close()
   if not self.testing:stop_children()
@@ -320,7 +328,8 @@ class App:
    return data
   except (OSError,ValueError,AttributeError):return {'accent':0}
  def save_preferences(self):
-  data=dict(accent=self.accent,preferred_accent=self.preferred_accent,selection=self.selection.get(),copy_prompt=self.auto.get(),mac_guide_seen=bool(self.preferences.get('mac_guide_seen',False)))
+  data=dict(self.preferences,accent=self.accent,preferred_accent=self.preferred_accent,selection=self.selection.get(),copy_prompt=self.auto.get(),mac_guide_seen=bool(self.preferences.get('mac_guide_seen',False)))
+  self.preferences=data
   (DATA/'preferences.json').write_text(json.dumps(data),encoding='utf-8')
  def set_accent(self,accent):
   self.accent=accent
@@ -390,6 +399,11 @@ class App:
   else:
    self.button(f,'Mac 首次运行指南 ↗',self.open_mac_guide,small=True).pack(anchor='w',pady=5)
    self.button(f,'启用 macOS 划词权限',lambda:mac.request_permissions(events),small=True).pack(anchor='w',pady=5)
+  section('软件更新')
+  def update_toggle():
+   self.preferences['check_updates']=not self.preferences.get('check_updates',True);self.save_preferences()
+  toggle('自动检查更新',lambda:self.preferences.get('check_updates',True),update_toggle)
+  self.button(f,'检查更新 · v'+self.current_version,lambda:self.updates.check(True),small=True).pack(anchor='w',pady=5)
   tk.Frame(f,bg='#edf1f4',height=1).pack(fill='x',pady=(3,7))
   quit=self.button(f,'退出应用',self.root.destroy,small=True);quit.config(fg='#8d6669');quit.pack(anchor='w')
   m.update_idletasks();self.settings_size=(max(round(258*self.scale),f.winfo_reqwidth()+2),f.winfo_reqheight()+2)
@@ -643,6 +657,7 @@ class App:
      self.selection_version+=1;self.query_source(value,anchor=(value['x']-10,value['y']-24))
     elif kind=='mac_query_result':self.finish_mac_query(value)
     elif kind=='mac_bridge_ready':self.native_ready=True;self.sync_mac_regions()
+    elif kind=='app_update':self.updates.receive(value)
     elif kind=='voices_ready':self.voice_installing=False;self.status.config(text=value)
     elif kind=='selection':
      if self.selection.get():self.prompt(value)

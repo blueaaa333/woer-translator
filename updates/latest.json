@@ -1,0 +1,26 @@
+{
+  "tag_name": "v0.2.2",
+  "draft": false,
+  "prerelease": false,
+  "body": "<!-- installer-downloads:start -->\n### 下载安装\n\n| 你的电脑 | 安装包 |\n| --- | --- |\n| Windows 10 / 11 · 64 位 | [下载 Windows 安装包](https://github.com/blueaaa333/woer-translator/releases/download/v0.2.2/WoerTranslator-0.2.2-Windows-x64-Setup.exe) |\n| Mac · Apple 芯片（M 系列） | [下载 Mac Apple 芯片版](https://github.com/blueaaa333/woer-translator/releases/download/v0.2.2/WoerTranslator-0.2.2-macOS-arm64.dmg) |\n| Mac · Intel 芯片 | [下载 Mac Intel 版](https://github.com/blueaaa333/woer-translator/releases/download/v0.2.2/WoerTranslator-0.2.2-macOS-x64.dmg) |\n\nMac：打开 DMG，把 App 拖入 Applications。[首次运行指南](https://github.com/blueaaa333/woer-translator/blob/main/docs/MAC_FIRST_RUN.md)。\n\n[SHA-256 校验文件](https://github.com/blueaaa333/woer-translator/releases/download/v0.2.2/SHA256SUMS.txt) 用于核对下载完整性；普通安装无需下载源码。\n<!-- installer-downloads:end -->\n\n沃尔翻译官 v0.2.2：修正 Mac 划词兼容性，将系统监听、剪贴板及取词移到独立进程，避免系统调用迟滞拖住查词窗口；界面处理遇到临时异常后会继续运行。\n\nMac 工具条支持更多浏览器和可选中文本的应用。首次引导新增“启用 Mac 划词权限”按钮；授权辅助功能和输入监控后返回阅读页面重新选词。更新后若系统未沿用旧权限，请在系统设置中为 Applications 内的新版本重新授权，再退出并打开软件。\n\nApple 芯片和 Intel 构建均增加打包后真实启动检查：运行主事件循环、启动独立系统服务，并验证服务暂停时窗口仍有响应。自动检查不等同于已在所有实体 Mac 和浏览器上验收；仍欢迎反馈具体系统版本、浏览器和复现方式。\n\n**Mac 用户请先看完 [首次运行指南](https://github.com/blueaaa333/woer-translator/blob/main/docs/MAC_FIRST_RUN.md)**。不要把“无法验证开发者”和“文件已损坏 / 检测到恶意软件”混为一谈。确认下载与 SHA-256 后，优先使用系统“仍要打开”入口；命令仅为可选手动操作，成功后不需要重复执行。\n\nMac 指南和海报可在仓库中查看，DMG 内也包含离线说明。首次成功打开后的引导可从右上角“··· → Mac 首次运行指南”重新查看。\n\nmacOS 15 或更高版本为本次构建检查环境。较早版本尚未验证兼容性；Mac 版属首个预览版本，欢迎提供实际使用反馈。\n\n### 使用说明\n\n选中英文后显示小工具条，点击“查词”才读取选词并展开释义。也支持复制或手动输入查询；自动朗读默认关闭。\n\nWindows 英美离线语音请在右上角“···”中主动选择下载，首次约 150 MB。安装包不附带 Piper 或模型。Mac 使用系统本地 `say`，分别选择 `en_GB` / `en_US` 口音；若系统缺少某一口音，会提示下载对应系统声音，绝不把同一个声音伪装成两种口音。\n\nMac 划词需在系统设置中授权辅助功能和输入监控；未授权时仍可手动或复制查询。请从菜单选择“启用 macOS 划词权限”。macOS 版没有在实体 Mac 上完成所有浏览器的划词体验验证，CI 检查不等同于完整人工验收。\n\n### 签名与许可\n\nWindows 安装器尚无商业代码签名；Mac App 仅作本地临时签名，没有 Apple Developer ID 签名和公证，系统可能拦截。请按系统官方说明和自己的信任判断处理，不需关闭系统整体安全保护。\n\n原创代码 MIT；WordNet、COW、Wiktionary、Lucide、OpenCC、Python、Tcl/Tk 和 Mac 的 PyObjC 各适用其原许可。完整声明随程序资源提供，公开数据不包含个人 PDF 或 ECDICT。\n\n### GitHub Packages\n\n`@blueaaa333/woer-translator` 是 npm 安装包下载器，可自动选择平台并校验发行文件。普通用户直接下载上面的安装包即可，不需要 Node.js；npm 不会自动运行桌面程序。\n\n### Code signing policy\n\n正在申请 SignPath Foundation 的 Windows 开源签名支持，尚未获批，Windows 文件仍未签名。详见 [Code signing policy](https://github.com/blueaaa333/woer-translator/blob/main/docs/CODE_SIGNING_POLICY.md)。\n",
+  "assets": [
+    {
+      "name": "WoerTranslator-0.2.2-macOS-arm64.dmg",
+      "browser_download_url": "https://github.com/blueaaa333/woer-translator/releases/download/v0.2.2/WoerTranslator-0.2.2-macOS-arm64.dmg",
+      "digest": "sha256:b01f3aa6fd8ce2ea211b1df05a1f0413f5ef5addb77762629b69528feb520390",
+      "size": 115372389
+    },
+    {
+      "name": "WoerTranslator-0.2.2-macOS-x64.dmg",
+      "browser_download_url": "https://github.com/blueaaa333/woer-translator/releases/download/v0.2.2/WoerTranslator-0.2.2-macOS-x64.dmg",
+      "digest": "sha256:c34e04456fc5dac9310eeb737560b167bab3ea52b0ed86fa18744b3f0ccd5203",
+      "size": 118523791
+    },
+    {
+      "name": "WoerTranslator-0.2.2-Windows-x64-Setup.exe",
+      "browser_download_url": "https://github.com/blueaaa333/woer-translator/releases/download/v0.2.2/WoerTranslator-0.2.2-Windows-x64-Setup.exe",
+      "digest": "sha256:ab18b2b0c443b0f26ce6a2ad05f576f289255e5d15cff9c9189942fc6c78ca7d",
+      "size": 31349609
+    }
+  ]
+}

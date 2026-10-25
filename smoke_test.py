@@ -4,6 +4,8 @@ import sys
 from lexicon import Lexicon,definition_sections
 
 def run(base):
+    import certifi
+    assert Path(certifi.where()).is_file()
     base=Path(base);lexicon=Lexicon(base)
     assert '经过充分研究' in definition_sections(lexicon.lookup('well-researched'))['primary'][0]['text']
     assert lexicon.lookup('current')['community']

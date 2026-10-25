@@ -22,6 +22,13 @@ try:
     assert app.popup.winfo_ismapped()
     app.close_floating();app.root.update()
     assert not app.popup.winfo_exists()
+    from updater import Release,asset_name
+    future=Release('9.9.9',asset_name('9.9.9'),'unused','0'*64,1048576,'包含软件内更新提醒和问题修复。')
+    app.updates.release=future;app.updates.show();app.root.update()
+    assert '9.9.9' in app.updates.version_label.cget('text')
+    assert app.updates.action.cget('text')=='下载更新'
+    assert app.updates.action.winfo_rooty()+app.updates.action.winfo_height()<=app.updates.window.winfo_rooty()+app.updates.window.winfo_height()
+    app.updates.window.destroy()
     if sys.platform=='darwin':
         app.mac_welcome();app.root.update()
         assert app.welcome_popup.winfo_exists()

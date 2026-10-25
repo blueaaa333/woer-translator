@@ -89,3 +89,7 @@ jobs:
           else
             npm publish --registry=https://npm.pkg.github.com
           fi
+      - name: Publish in-app update feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/publish_update_feed.py "$(tr -d '\r\n' < VERSION)"

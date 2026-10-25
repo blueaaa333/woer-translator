@@ -1,5 +1,5 @@
 """Build only on the target OS. No personal data or optional speech binaries."""
-import argparse,json,os,platform,shutil,subprocess,sys
+import argparse,json,os,platform,shutil,subprocess,sys,plistlib
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
@@ -36,6 +36,13 @@ def build(skip_installer=False):
     if sys.platform=='win32':args+=['--manifest',str(ROOT/'QingCi.manifest'),'--add-binary',f'{ROOT/"DesktopBridge.exe"}{os.pathsep}.']
     else:args+=['--osx-bundle-identifier','io.github.blueaaa333.woer-translator','--hidden-import','mac_platform','--hidden-import','ApplicationServices','--hidden-import','Quartz','--hidden-import','AppKit']
     args+=[str(ROOT/'app.py')];command(*args)
+    if sys.platform=='darwin':
+        bundle=ROOT/'dist'/'WoerTranslator.app'
+        plist=bundle/'Contents'/'Info.plist'
+        with plist.open('rb') as stream:info=plistlib.load(stream)
+        info.update(CFBundleShortVersionString=version,CFBundleVersion=version)
+        with plist.open('wb') as stream:plistlib.dump(info,stream)
+        command('/usr/bin/codesign','--force','--deep','--sign','-',bundle)
     executable=ROOT/'dist'/'WoerTranslator'/'WoerTranslator.exe' if sys.platform=='win32' else ROOT/'dist'/'WoerTranslator.app'/'Contents'/'MacOS'/'WoerTranslator'
     report=stage/'smoke-report.json';command(executable,'--smoke-test','--smoke-report',report)
     assert json.loads(report.read_text(encoding='utf-8'))['dictionaries']=='ok'
@@ -69,6 +76,7 @@ def build(skip_installer=False):
         if not link.exists():link.symlink_to('/Applications')
         command('/usr/bin/hdiutil','create','-volname','Woer Translator','-srcfolder',dmg_stage,'-ov','-format','UDZO',out/f'WoerTranslator-{version}-macOS-{arch}.dmg')
         command('/usr/bin/productbuild','--component',app,'/Applications','--identifier','io.github.blueaaa333.woer-translator','--version',version,out/f'WoerTranslator-{version}-macOS-{arch}.pkg')
+        command(sys.executable,ROOT/'scripts'/'check_mac_update.py',out/f'WoerTranslator-{version}-macOS-{arch}.dmg')
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--skip-installer',action='store_true')

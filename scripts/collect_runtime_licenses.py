@@ -13,7 +13,7 @@ def collect(destination):
         with urllib.request.urlopen(url,timeout=60) as response:text=response.read().decode()
     (destination/'Python-LICENSE.txt').write_text(text,encoding='utf-8')
     versions={'Python':platform.python_version()}
-    names=['opencc-python-reimplemented','pyinstaller']
+    names=['opencc-python-reimplemented','certifi','pyinstaller']
     if sys.platform=='darwin':names += sorted(d.metadata['Name'] for d in metadata.distributions() if d.metadata['Name'].lower().startswith('pyobjc-'))
     for name in names:
         distribution=metadata.distribution(name);versions[name]=distribution.version
