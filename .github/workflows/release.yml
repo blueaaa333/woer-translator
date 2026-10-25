@@ -63,7 +63,7 @@ jobs:
         working-directory: packages/launcher
         run: |
           npm test
-          npm pack --pack-destination ../../release-assets
+          npm pack --dry-run
       - name: Publish desktop installers
         env:
           GH_TOKEN: ${{ github.token }}
@@ -72,11 +72,11 @@ jobs:
           set -euo pipefail
           VERSION=$(tr -d '\r\n' < VERSION)
           test "$(node -p "require('./packages/launcher/package.json').version")" = "$VERSION"
-          (cd release-assets && sha256sum * > SHA256SUMS.txt)
+          python scripts/release_assets.py stage --version "$VERSION"
           if gh release view "v$VERSION" >/dev/null 2>&1; then
-            gh release upload "v$VERSION" release-assets/* --clobber
+            gh release upload "v$VERSION" public-release/* --clobber
           else
-            gh release create "v$VERSION" release-assets/* --target "$GITHUB_SHA" --title "沃尔翻译官 v$VERSION · Windows & macOS" --notes-file docs/RELEASE_NOTES.md
+            gh release create "v$VERSION" public-release/* --target "$GITHUB_SHA" --title "沃尔翻译官 v$VERSION · Windows & macOS" --notes-file release-notes.md
           fi
       - name: Publish GitHub Package
         working-directory: packages/launcher

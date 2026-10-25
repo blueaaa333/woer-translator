@@ -1,0 +1,49 @@
+name: Simplify release downloads
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/release-downloads.yml]
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: Existing release tags separated by spaces
+        required: true
+        default: v0.2.0 v0.2.1
+permissions:
+  contents: write
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+jobs:
+  simplify:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAGS: ${{ inputs.tags || 'v0.2.0 v0.2.1' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests -p test_release_assets.py
+      - name: Archive auxiliary downloads and verify SHA-256
+        run: python scripts/release_assets.py archive --tags "$RELEASE_TAGS"
+      - name: Preserve archived files before modifying releases
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-auxiliary-backup
+          path: release-backup/
+          retention-days: 90
+          if-no-files-found: error
+      - name: Keep three installers and update download links
+        run: python scripts/release_assets.py apply --tags "$RELEASE_TAGS"
+      - name: Record resulting release metadata
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-download-receipts
+          path: |
+            release-backup/*/after.json
+            release-backup/*/SHA256SUMS.txt
+          retention-days: 90
+          if-no-files-found: warn

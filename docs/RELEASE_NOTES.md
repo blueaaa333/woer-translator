@@ -2,16 +2,14 @@
 
 **Mac 用户请先看完 [首次运行指南](https://github.com/blueaaa333/woer-translator/blob/main/docs/MAC_FIRST_RUN.md)**。不要把“无法验证开发者”和“文件已损坏 / 检测到恶意软件”混为一谈。确认下载与 SHA-256 后，优先使用系统“仍要打开”入口；命令仅为可选手动操作，成功后不需要重复执行。
 
-![Mac 首次运行海报](https://raw.githubusercontent.com/blueaaa333/woer-translator/main/docs/mac-first-run-poster.png)
-
-Release 附带可下载的 HTML 指南（文件名以 `-Mac.html` 结尾）与海报（`-Mac.png`）；DMG 内也包含这两份中文命名的说明。首次成功打开后的引导可从右上角“··· → Mac 首次运行指南”重新查看。
+Mac 指南和海报可在仓库中查看，DMG 内也包含离线说明。首次成功打开后的引导可从右上角“··· → Mac 首次运行指南”重新查看。
 
 ### 下载选择
 
-- Windows 10 / 11（64 位）：`Windows-x64-Setup.exe`；无需安装可选择 `Portable.zip`，先完整解压再运行。
-- Mac Apple 芯片：`macOS-arm64.dmg`；Intel Mac：`macOS-x64.dmg`。打开后把 App 拖入 Applications。也提供 `.pkg` 安装器。
+- Windows 10 / 11（64 位）：`Windows-x64-Setup.exe`。
+- Mac Apple 芯片：`macOS-arm64.dmg`；Intel Mac：`macOS-x64.dmg`。打开后把 App 拖入 Applications。
 - macOS 15 或更高版本为本次构建检查环境。较早版本尚未验证兼容性；Mac 版属首个预览版本，欢迎提供实际使用反馈。
-- `SHA256SUMS.txt` 提供每个发行文件的校验值。`checks.json` 记录各平台构建后启动及词库检查结果。
+- `SHA256SUMS.txt` 提供三个安装包的校验值，供手动核对或 Packages 下载器校验。构建报告、便携版及备用格式保留在 Actions 构建产物中；npm 包在 GitHub Packages 中提供。
 
 ### 使用说明
 

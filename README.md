@@ -14,7 +14,7 @@
 
 ## 开始使用
 
-[下载桌面安装包](https://github.com/blueaaa333/woer-translator/releases/latest)：Windows x64 安装器 / 便携版，Mac Apple 芯片 / Intel 的 DMG 与 PKG。安装包内置解释器和公开词库，不需另装 Python。具体限制见 [发行说明](docs/RELEASE_NOTES.md)。
+[下载桌面安装包](https://github.com/blueaaa333/woer-translator/releases/latest)：Windows x64 安装器、Mac Apple 芯片版或 Intel 版 DMG。安装包内置解释器和公开词库，不需另装 Python。具体限制见 [发行说明](docs/RELEASE_NOTES.md)。
 
 **Mac 用户先看 [首次运行指南与海报](docs/MAC_FIRST_RUN.md)**：先核对 SHA-256，再按提示类型处理。DMG 内附有可离线阅读的 HTML 指南；App 第一次成功打开也会显示引导，并可从“···”菜单重新查看。终端命令是确认可信后的可选操作，不能修复真正损坏的文件，也不需要重复运行。
 
