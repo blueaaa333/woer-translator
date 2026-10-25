@@ -31,7 +31,8 @@ def build(skip_installer=False):
         index=args.index(f'{ROOT/directory}{os.pathsep}.');args[index]=f'{ROOT/directory}{os.pathsep}{directory}'
     args+=['--add-data',f'{stage/"runtime-licenses"}{os.pathsep}licenses/runtime','--add-data',f'{stage/"build-info.json"}{os.pathsep}.',
            '--add-data',f'{ROOT/"docs"/"MAC_FIRST_RUN.html"}{os.pathsep}docs',
-           '--add-data',f'{ROOT/"scripts"/"speech-downloads.json"}{os.pathsep}scripts','--hidden-import','scripts.setup_speech']
+           '--add-data',f'{ROOT/"scripts"/"speech-downloads.json"}{os.pathsep}scripts','--hidden-import','scripts.setup_speech',
+           '--hidden-import','scripts.check_runtime']
     if sys.platform=='win32':args+=['--manifest',str(ROOT/'QingCi.manifest'),'--add-binary',f'{ROOT/"DesktopBridge.exe"}{os.pathsep}.']
     else:args+=['--osx-bundle-identifier','io.github.blueaaa333.woer-translator','--hidden-import','mac_platform','--hidden-import','ApplicationServices','--hidden-import','Quartz','--hidden-import','AppKit']
     args+=[str(ROOT/'app.py')];command(*args)
@@ -39,6 +40,12 @@ def build(skip_installer=False):
     report=stage/'smoke-report.json';command(executable,'--smoke-test','--smoke-report',report)
     assert json.loads(report.read_text(encoding='utf-8'))['dictionaries']=='ok'
     shutil.copy2(report,out/f'WoerTranslator-{version}-{target}-{arch}-checks.json')
+    if sys.platform=='darwin':
+        runtime_report=stage/'runtime-report.json'
+        subprocess.run([str(executable),'--gui-self-test','--gui-report',str(runtime_report)],cwd=ROOT,check=True,timeout=40)
+        runtime=json.loads(runtime_report.read_text(encoding='utf-8'))
+        if 'error' in runtime:raise RuntimeError('Frozen macOS UI check failed: '+str(runtime))
+        shutil.copy2(runtime_report,out/f'WoerTranslator-{version}-{target}-{arch}-runtime.json')
     if sys.platform=='win32':
         shutil.make_archive(str(out/f'WoerTranslator-{version}-Windows-x64-Portable'),'zip',ROOT/'dist','WoerTranslator')
         if not skip_installer:

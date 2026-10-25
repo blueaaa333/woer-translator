@@ -1,3 +1,9 @@
+import sys
+if __name__=='__main__' and '--mac-bridge' in sys.argv:
+ from mac_native import run
+ run()
+ raise SystemExit
+
 import tkinter as tk
 from tkinter import ttk
 import ctypes as C,sqlite3,sys,os,re,threading,time,queue,urllib.request,urllib.parse,hashlib,json,subprocess,atexit,base64,traceback
@@ -197,7 +203,7 @@ class App:
   self.text.tag_configure('form_meaning',foreground='#3b5360',font=(UI_FONT,10),spacing3=3)
   self.more=self.button(f,'补充释义与来源  ▾',self.toggle_details,small=True);self.more.config(font=(UI_FONT,9),fg='#718b9b')
   bottom=self.bottom=tk.Frame(f,bg='white');bottom.pack(fill='x')
-  self.status=tk.Label(bottom,text='选中单词后，点击查词',bg='white',fg='#6c8692',font=(UI_FONT,8),anchor='w',width=30);self.status.pack(side='left',fill='x',expand=True)
+  self.status=tk.Label(bottom,text='选中单词后，点击查词' if IS_WINDOWS else '正在准备 Mac 划词服务，可先手动查词…',bg='white',fg='#6c8692',font=(UI_FONT,8),anchor='w',width=30);self.status.pack(side='left',fill='x',expand=True)
   source_button=self.button(bottom,'来源 ↗',self.source_link,small=True);source_button.config(font=(UI_FONT,9),fg='#8599a5');source_button.pack(side='right')
   self.settext('选中英文，点击「查词」。\n\n完整离线释义，不调用第三方私有接口。')
   self.select_tab('definition')
@@ -221,6 +227,7 @@ class App:
   tk.Label(body,text='欢迎使用沃尔翻译官',font=(UI_FONT,16,'bold'),bg='white',fg='#183d50',anchor='w').pack(fill='x',pady=(0,12))
   tk.Label(body,text='完整指南可随时从右上角「···」重新打开。\n\n本版本尚未取得 Apple 公证。遇到首次打开拦截时，请先核对下载来源与 SHA-256，再按指南处理；并不是每个人都需要运行终端命令。\n\n划词需要在系统设置中允许辅助功能与输入监控，未授权也可手动输入或主动复制查询。',wraplength=350,justify='left',bg='white',fg='#405f70',font=(UI_FONT,11)).pack(fill='x',pady=(0,14))
   self.button(body,'阅读完整首次运行指南 ↗',self.open_mac_guide,small=True).pack(anchor='w',pady=8)
+  self.button(body,'启用 Mac 划词权限',lambda:mac.request_permissions(events),small=True).pack(anchor='w',pady=5)
   def done():
    if not self.testing:self.preferences['mac_guide_seen']=True;self.save_preferences()
    popup.destroy()
@@ -400,7 +407,9 @@ class App:
   y=max(rect.top+4,min(y,rect.bottom-height-4))
   m.geometry(f'{width}x{height}{x:+d}{y:+d}')
  def work_area(self,x,y):
-  if not IS_WINDOWS:return mac.work_area(x,y)
+  if not IS_WINDOWS:
+   from types import SimpleNamespace
+   return mac.work_area(x,y) or SimpleNamespace(left=0,top=0,right=self.root.winfo_screenwidth(),bottom=self.root.winfo_screenheight())
   from ctypes import wintypes
   class MONITORINFO(C.Structure):
    _fields_=[('cbSize',wintypes.DWORD),('rcMonitor',wintypes.RECT),('rcWork',wintypes.RECT),('dwFlags',wintypes.DWORD)]
@@ -571,56 +580,63 @@ class App:
  def query_source_macos(self,source,accent=None,copy_only=False,anchor=None):
   version=self.selection_version
   if not copy_only:self.reset_result('正在读取本次选中的单词…')
-  def failed():
-   if version!=self.selection_version:return
-   if not copy_only:self.reset_result('未能取词：请开启辅助功能权限，或复制单词后查询。')
+  self.clipboard_suppress_until=time.monotonic()+3
+  self.mac_query=dict(version=version,accent=accent,copy_only=copy_only,anchor=anchor)
+  if not mac.query_selection(source,version):
+   self.finish_mac_query(dict(version=version,error='Mac 取词服务未就绪，请稍后重试或手动查词。'))
+  def timeout():
+   if getattr(self,'mac_query',None) and self.mac_query['version']==version:
+    self.finish_mac_query(dict(version=version,error='取词超时，请重新选词或手动输入；窗口仍可继续使用。'))
+  self.root.after(3500,timeout)
+ def finish_mac_query(self,value):
+  request=getattr(self,'mac_query',None)
+  if not request or value['version']!=request['version']:return
+  self.mac_query=None
+  if value['version']!=self.selection_version:return
+  anchor=request['anchor'];word=normalize_query(value.get('word',''))
+  if valid_query(word):
+   self.seq=clipboard_sequence()
+   if not request['copy_only']:self.lookup(word,request['accent'],anchor=anchor)
+  else:
+   message=value.get('error','未能读取本次选区，请重新选词。')
+   if request['copy_only']:self.status.config(text=message)
+   else:self.reset_result(message)
    if anchor:self.position(self.root,380,420,x=anchor[0],y=anchor[1])
    self.show()
-  if not mac.activate_source(source['pid']):failed();return
-  def copy_now():
-   if version!=self.selection_version:return
-   if not mac.source_is_frontmost(source['pid']):failed();return
-   self.clipboard_suppress_until=time.monotonic()+1.5
-   self.root.clipboard_clear();before=clipboard_sequence();self.seq=before
-   if not mac.copy_selection():failed();return
-   def read(attempt=0):
-    if version!=self.selection_version:return
-    if clipboard_sequence()!=before:
-     word=normalize_query(clipboard())
-     if valid_query(word):
-      self.seq=clipboard_sequence()
-      if not copy_only:self.lookup(word,accent,anchor=anchor)
-      return
-    if attempt<18:self.root.after(35,lambda:read(attempt+1))
-    else:failed()
-   self.root.after(35,read)
-  self.root.after(100,copy_now)
  def save(self):
   if not self.word:return
   p=DATA/'生词本.txt';existing=p.read_text(encoding='utf-8') if p.exists() else ''
   if self.word not in existing.splitlines():p.write_text(existing+self.word+'\n',encoding='utf-8')
   self.status.config(text='已加入生词本')
  def poll(self):
-  seq=clipboard_sequence()
-  if seq!=self.seq:
-   self.seq=seq
-   if self.auto.get() and time.monotonic()>=self.clipboard_suppress_until:self.prompt(clipboard())
-  while not events.empty():
-   kind,value=events.get()
-   if kind=='clear':self.dismiss_from_input(value)
-   elif kind=='gesture':self.prompt('',value)
-   elif kind=='resolved':
-    identifier,word=value
-    if self.pending_source and self.pending_source['id']==identifier:self.pending_source['word']=word
-   elif kind=='lookup':self.lookup(value)
-   elif kind=='hotkey_source':
-    self.selection_version+=1;self.query_source(value,anchor=(value['x']-10,value['y']-24))
-   elif kind=='voices_ready':self.voice_installing=False;self.status.config(text=value)
-   elif kind=='selection':
-    if self.selection.get():self.prompt(value)
-   elif kind=='show':self.show();self.status.config(text=value)
-   else:self.status.config(text=value)
-  self.root.after(25,self.poll)
+  try:
+   seq=clipboard_sequence()
+   if seq!=self.seq:
+    self.seq=seq
+    if self.auto.get() and time.monotonic()>=self.clipboard_suppress_until:self.prompt(clipboard())
+   deadline=time.monotonic()+.008
+   while not events.empty() and time.monotonic()<deadline:
+    kind,value=events.get_nowait()
+    if kind=='clear':self.dismiss_from_input(value)
+    elif kind=='gesture':self.prompt('',value)
+    elif kind=='resolved':
+     identifier,word=value
+     if self.pending_source and self.pending_source['id']==identifier:self.pending_source['word']=word
+    elif kind=='lookup':self.lookup(value)
+    elif kind=='hotkey_source':
+     self.selection_version+=1;self.query_source(value,anchor=(value['x']-10,value['y']-24))
+    elif kind=='mac_query_result':self.finish_mac_query(value)
+    elif kind=='mac_bridge_ready':self.native_ready=True
+    elif kind=='voices_ready':self.voice_installing=False;self.status.config(text=value)
+    elif kind=='selection':
+     if self.selection.get():self.prompt(value)
+    elif kind=='show':self.show();self.status.config(text=value)
+    else:self.status.config(text=value)
+  except Exception:
+   self.on_error(*sys.exc_info())
+  finally:
+   try:self.root.after(25,self.poll)
+   except tk.TclError:pass
 def main():
  if '--smoke-test' in sys.argv:
   from smoke_test import run
@@ -636,7 +652,13 @@ def main():
    hwnd=u.FindWindowW(None,'沃尔翻译官');u.ShowWindow(hwnd,9);u.SetForegroundWindow(hwnd);return
  else:
   if not mac.single_instance(DATA):return
- try:App().root.mainloop()
+ try:
+  app=App()
+  # Real startup is checked with the same listeners and mainloop as user launches.
+  if '--gui-self-test' in sys.argv:
+   from scripts.check_runtime import schedule
+   schedule(app,Path(sys.argv[sys.argv.index('--gui-report')+1]))
+  app.root.mainloop()
  except Exception:
   exc,value,tb=sys.exc_info();write_error('startup',exc,value,tb)
   if IS_WINDOWS:u.MessageBoxW(None,'启动失败，详细信息已写入：\n'+str(DATA/'application-errors.log'),'沃尔翻译官',16)
