@@ -1,6 +1,6 @@
 {
   "name": "@blueaaa333/woer-translator",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Download and verify official Woer Translator desktop installers for Windows and macOS",
   "license": "MIT",
   "repository": {"type": "git", "url": "https://github.com/blueaaa333/woer-translator.git", "directory": "packages/launcher"},

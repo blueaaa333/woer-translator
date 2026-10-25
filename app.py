@@ -405,9 +405,12 @@ class App:
   toggle('自动检查更新',lambda:self.preferences.get('check_updates',True),update_toggle)
   self.button(f,'检查更新 · v'+self.current_version,lambda:self.updates.check(True),small=True).pack(anchor='w',pady=5)
   tk.Frame(f,bg='#edf1f4',height=1).pack(fill='x',pady=(3,7))
-  quit=self.button(f,'退出应用',self.root.destroy,small=True);quit.config(fg='#8d6669');quit.pack(anchor='w')
+  footer=tk.Frame(f,bg='white');footer.pack(fill='x')
+  self.button(footer,'关闭菜单',m.destroy,small=True).pack(side='left')
+  quit=self.button(footer,'退出应用',self.root.destroy,small=True);quit.config(fg='#8d6669');quit.pack(side='right')
   m.update_idletasks();self.settings_size=(max(round(258*self.scale),f.winfo_reqwidth()+2),f.winfo_reqheight()+2)
-  self.position_settings();self.round_window(m,15);m.deiconify()
+  from menu_layout import show_settings
+  show_settings(self,m)
   self.watch_mac_window(m)
   m.bind('<Escape>',lambda e:m.destroy())
  def follow_settings(self,event):
@@ -669,6 +672,9 @@ class App:
    try:self.root.after(25,self.poll)
    except tk.TclError:pass
 def main():
+ if '--check-menu-layout' in sys.argv:
+  from menu_layout_checks import frozen_check
+  frozen_check(App,sys.argv[sys.argv.index('--check-menu-layout')+1]);return
  if '--smoke-test' in sys.argv:
   from smoke_test import run
   try:report=run(BASE)

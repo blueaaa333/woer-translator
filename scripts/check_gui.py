@@ -18,6 +18,8 @@ try:
     app.preferred_accent=1;app.position_settings();app.root.update()
     assert initial==(app.settings_popup.winfo_x(),app.settings_popup.winfo_y())
     app.settings_popup.destroy()
+    from menu_layout_checks import exercise
+    menu_check=exercise(app)
     app.prompt('current');app.root.update()
     assert app.popup.winfo_ismapped()
     app.close_floating();app.root.update()
@@ -33,5 +35,5 @@ try:
         app.mac_welcome();app.root.update()
         assert app.welcome_popup.winfo_exists()
         app.welcome_popup.destroy()
-    print(json.dumps({'platform':sys.platform,'gui':'ok','lookup':'ok','anchored_settings':'ok','toolbar':'ok'}))
+    print(json.dumps({'platform':sys.platform,'gui':'ok','lookup':'ok','anchored_settings':'ok','toolbar':'ok','menu_layout':menu_check}))
 finally:app.root.destroy()

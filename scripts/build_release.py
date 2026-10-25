@@ -47,6 +47,10 @@ def build(skip_installer=False):
     report=stage/'smoke-report.json';command(executable,'--smoke-test','--smoke-report',report)
     assert json.loads(report.read_text(encoding='utf-8'))['dictionaries']=='ok'
     shutil.copy2(report,out/f'WoerTranslator-{version}-{target}-{arch}-checks.json')
+    if sys.platform=='win32':
+        menu_report=stage/'menu-layout.json'
+        command(executable,'--check-menu-layout',menu_report)
+        assert json.loads(menu_report.read_text(encoding='utf-8'))['resize_clip']=='ok'
     if sys.platform=='darwin':
         runtime_report=stage/'runtime-report.json'
         subprocess.run([str(executable),'--gui-self-test','--gui-report',str(runtime_report)],cwd=ROOT,check=True,timeout=40)
