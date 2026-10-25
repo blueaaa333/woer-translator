@@ -28,6 +28,18 @@ def fixture():
 
 
 class RecordedAudioTests(unittest.TestCase):
+    def test_missing_recording_result_is_reused_after_restart_but_expires(self):
+        empty=json.dumps(dict(query=dict(pages=[]))).encode()
+        with tempfile.TemporaryDirectory() as folder:
+            with patch('recorded_audio.download',return_value=empty) as fetch:
+                self.assertIsNone(Recordings(folder).get('missingword',1))
+                self.assertIsNone(Recordings(folder).get('missingword',2))
+                self.assertEqual(fetch.call_count,1)
+            import time
+            with patch('recorded_audio.time.time',return_value=time.time()+86410),patch('recorded_audio.download',return_value=empty) as fetch:
+                self.assertIsNone(Recordings(folder).get('missingword',1))
+                self.assertEqual(fetch.call_count,1)
+
     def test_accepts_specific_free_licences_only(self):
         for url in ('https://creativecommons.org/licenses/by-sa/3.0/',
                     'http://creativecommons.org/licenses/by/3.0/us/deed.en',

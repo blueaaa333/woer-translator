@@ -96,6 +96,24 @@ class Recordings:
         key = hashlib.sha256(f'{accent}|{word}'.encode()).hexdigest()
         return self.folder / key
 
+    def read_catalog(self, word):
+        path=self.folder/('lookup-'+hashlib.sha256(word.encode()).hexdigest()+'.json')
+        try:
+            saved=json.loads(path.read_text(encoding='utf-8'))
+            if saved['word']==word and 0<=time.time()-saved['checked_at']<86400 and isinstance(saved['pages'],list):
+                return saved['pages']
+        except (OSError,ValueError,KeyError,TypeError):pass
+        return None
+
+    def save_catalog(self, word, pages):
+        path=self.folder/('lookup-'+hashlib.sha256(word.encode()).hexdigest()+'.json')
+        try:
+            self.folder.mkdir(parents=True,exist_ok=True)
+            temporary=path.with_suffix('.part')
+            temporary.write_text(json.dumps(dict(word=word,checked_at=time.time(),pages=pages)),encoding='utf-8')
+            os.replace(temporary,path)
+        except OSError:pass
+
     def cached(self, word, accent):
         stem = self.paths(word, accent)
         try:
@@ -128,6 +146,9 @@ class Recordings:
             return None
         try:
             if word not in self.catalog:
+                saved=self.read_catalog(word)
+                if saved is not None:self.catalog[word]=saved
+            if word not in self.catalog:
                 titles = [f'File:En-{region}-{word}.{extension}'
                           for region in ('uk', 'gb', 'us') for extension in ('ogg', 'oga', 'wav', 'mp3')]
                 params = dict(action='query', format='json', formatversion=2,
@@ -135,7 +156,10 @@ class Recordings:
                               iiprop='url|extmetadata|sha1|size|mime',
                               iiextmetadatafilter='Artist|LicenseShortName|LicenseUrl|Restrictions')
                 response = json.loads(download(API + '?' + urllib.parse.urlencode(params), MAX_AUDIO))
-                self.catalog[word] = response.get('query', {}).get('pages', [])
+                pages=response.get('query',{}).get('pages')
+                if not isinstance(pages,list):raise ValueError('Invalid recording catalogue')
+                self.catalog[word]=pages
+                self.save_catalog(word,pages)
             candidates = [select_recording(page, word, accent) for page in self.catalog[word]]
             metadata = next((candidate for candidate in candidates if candidate), None)
             if metadata is None:

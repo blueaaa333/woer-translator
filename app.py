@@ -258,7 +258,7 @@ class App:
   self.audio_serial+=1
   self.speech.close()
   if not self.testing:stop_children()
-  self.player.stop() if self.player else winsound.PlaySound(None,0)
+  self.player.close() if self.player else winsound.PlaySound(None,0)
  def warm_toolbar(self):
   if self.popup and self.popup.winfo_exists():return
   self._warming=True
@@ -591,6 +591,7 @@ class App:
   if anchor is None:self.position(self.root,380,self.card_height)
   else:self.position(self.root,380,self.card_height,x=anchor[0],y=anchor[1])
   self.show()
+  if self.player and not self.testing and not self.preferences.get('legacy_audio',False):self.player.warm(self.preferences.get('audio_device',''))
   chosen=self.accent if accent is None else accent
   if chosen:self.speak(chosen)
  def audio_check(self):
