@@ -16,6 +16,7 @@ from lexicon import Lexicon,definition_text,definition_sections,word_form_note,e
 from chinese_text import simplified
 from pronunciation import SpeechEngine,phonetic_labels,SpeechUnavailable
 from word_forms import form_rows
+from preferences import PreferenceStore
 
 from app_paths import resource_root,user_data_dir
 IS_WINDOWS=sys.platform=='win32'
@@ -148,6 +149,7 @@ class App:
  def __init__(self,testing=False):
   self.lexicon=Lexicon(BASE);self.db=self.lexicon.db;self.result=None;self.online=None;self.use_online=False;self.word='';self.seq=clipboard_sequence();self.popup=None;self.testing=testing
   self.speech=SpeechEngine(BASE,DATA/'speech-cache',user_root=DATA/'speech')
+  self.preference_store=PreferenceStore(DATA/'preferences.json',read_only=testing)
   self.preferences=self.read_preferences();self.settings_popup=None
   self.preferred_accent=self.preferences.get('preferred_accent',2)
   self.audio_serial=0;self.audio_lock=threading.Lock();self.accent=self.preferences.get('accent',0);self.last_prompt='';self.last_prompt_time=0;self.pending_source=None;self.clipboard_suppress_until=0;self.selection_version=0
@@ -246,6 +248,9 @@ class App:
   try:self.status.config(text='操作未完成，错误已记录')
   except (AttributeError,tk.TclError):pass
  def shutdown(self):
+  for callback in self.root.tk.call('after','info'):
+   try:self.root.after_cancel(callback)
+   except tk.TclError:pass
   if getattr(self,'updates',None):self.updates.close()
   self.audio_serial+=1
   self.speech.close()
@@ -322,15 +327,10 @@ class App:
   self.root.withdraw()
   self.close_floating()
  def read_preferences(self):
-  try:
-   data=json.loads((DATA/'preferences.json').read_text(encoding='utf-8'))
-   if data.get('accent') not in [0,1,2]:data['accent']=0
-   return data
-  except (OSError,ValueError,AttributeError):return {'accent':0}
+  return self.preference_store.read()
  def save_preferences(self):
-  data=dict(self.preferences,accent=self.accent,preferred_accent=self.preferred_accent,selection=self.selection.get(),copy_prompt=self.auto.get(),mac_guide_seen=bool(self.preferences.get('mac_guide_seen',False)))
-  self.preferences=data
-  (DATA/'preferences.json').write_text(json.dumps(data),encoding='utf-8')
+  data=dict(self.preferences,auto_read=self.accent!=0,accent=self.accent,preferred_accent=self.preferred_accent,selection=self.selection.get(),copy_prompt=self.auto.get())
+  self.preferences=self.preference_store.write(data)
  def set_accent(self,accent):
   self.accent=accent
   if accent:self.preferred_accent=accent

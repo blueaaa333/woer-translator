@@ -27,6 +27,8 @@ __pycache__/
 !.env.example
 *生词本*
 *preferences*
+!/preferences.py
+!/tests/test_preferences.py
 *clipboard*
 *timing*
 *.pem

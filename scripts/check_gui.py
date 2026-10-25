@@ -37,3 +37,6 @@ try:
         app.welcome_popup.destroy()
     print(json.dumps({'platform':sys.platform,'gui':'ok','lookup':'ok','anchored_settings':'ok','toolbar':'ok','menu_layout':menu_check}))
 finally:app.root.destroy()
+
+from preference_checks import exercise as check_preferences
+print(json.dumps({'preferences':check_preferences(App)}))

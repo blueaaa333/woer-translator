@@ -69,3 +69,6 @@ def frozen_check(app_type, report):
         Path(report).write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
     finally:
         app.root.destroy()
+    from preference_checks import exercise as check_preferences
+    result['preferences']=check_preferences(app_type)
+    Path(report).write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
