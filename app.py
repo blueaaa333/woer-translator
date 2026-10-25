@@ -403,7 +403,7 @@ class App:
   for button in (uk,us):
    button.bind('<Enter>',lambda e:paint_accents());button.bind('<Leave>',lambda e:paint_accents())
   paint_accents()
-  if IS_WINDOWS:self.button(f,'下载英美离线语音（约150 MB）',self.install_voices,small=True).pack(anchor='w',pady=5)
+  if IS_WINDOWS:self.button(f,'下载／升级英美离线语音（约200 MB）',self.install_voices,small=True).pack(anchor='w',pady=5)
   else:
    self.button(f,'Mac 首次运行指南 ↗',self.open_mac_guide,small=True).pack(anchor='w',pady=5)
    self.button(f,'启用 macOS 划词权限',lambda:mac.request_permissions(events),small=True).pack(anchor='w',pady=5)
@@ -600,7 +600,7 @@ class App:
  def audio_sources(self):
   import webbrowser
   path=self.speech.recordings.attribution_path()
-  webbrowser.open(path.resolve().as_uri() if path.is_file() else 'https://github.com/blueaaa333/woer-translator/blob/main/docs/SPEECH.md')
+  webbrowser.open(path.resolve().as_uri() if self.speech.last_source and path.is_file() else 'https://github.com/blueaaa333/woer-translator/blob/main/docs/SPEECH.md')
  def speak(self,accent):
   if not self.word:return
   self.audio_serial+=1;serial=self.audio_serial;word=self.word
@@ -623,11 +623,11 @@ class App:
   threading.Thread(target=job,daemon=True).start()
  def install_voices(self):
   if getattr(self,'voice_installing',False):return
-  self.voice_installing=True;self.status.config(text='正在下载英美离线语音，首次约150 MB…')
+  self.voice_installing=True;self.status.config(text='正在下载英美离线语音，约200 MB…')
   def job():
    try:
     from scripts.setup_speech import install
-    install(DATA.resolve());events.put(('voices_ready','英美离线语音已就绪，可点击喇叭播放'))
+    install(DATA.resolve());events.put(('voices_installed','新英美音色已启用，可点击喇叭播放'))
    except Exception:events.put(('voices_ready','语音下载未完成，请检查网络后重试'))
   threading.Thread(target=job,daemon=True).start()
  def query_source_macos(self,source,accent=None,copy_only=False,anchor=None):
@@ -681,6 +681,11 @@ class App:
     elif kind=='mac_query_result':self.finish_mac_query(value)
     elif kind=='mac_bridge_ready':self.native_ready=True;self.sync_mac_regions()
     elif kind=='app_update':self.updates.receive(value)
+    elif kind=='voices_installed':
+     self.audio_serial+=1
+     if self.player:self.player.stop()
+     self.voice_installing=False;self.speech.root=DATA/'speech';self.preferences['prefer_recordings']=False;self.save_preferences();self.status.config(text=value)
+     if self.settings_popup and self.settings_popup.winfo_exists():self.settings_popup.destroy();self.menu()
     elif kind=='voices_ready':self.voice_installing=False;self.status.config(text=value)
     elif kind=='selection':
      if self.selection.get():self.prompt(value)

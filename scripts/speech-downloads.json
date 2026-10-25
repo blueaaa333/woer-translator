@@ -1,41 +1,42 @@
 {
   "voice_revision": "5041a7a49ae5b3a0f30e6837769eb03fdbb231bd",
+  "profile": "dictionary-20261025",
   "files": [
     {
-      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_GB/cori/medium/en_GB-cori-medium.onnx",
-      "path": "speech/voices/uk/voice.onnx",
-      "sha256": "1899f98e5fb8310154f3c2973f4b8a929ba7245e722b3d3a85680b833d95f10d",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_GB/cori/high/en_GB-cori-high.onnx",
+      "path": "speech/voices/uk/dictionary-voice.onnx",
+      "sha256": "470b4dd634c98f8a4850d7626ffc3dfc90774628eeef6605a6dd8f88f30a5903",
+      "bytes": 114219352
+    },
+    {
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_GB/cori/high/en_GB-cori-high.onnx.json",
+      "path": "speech/voices/uk/dictionary-voice.onnx.json",
+      "sha256": "9e7fb5b5671612c22f3c81cbe46c1ae87b031a4632bcb509e499dad6f1e2adec",
+      "bytes": 4963
+    },
+    {
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_GB/cori/high/MODEL_CARD",
+      "path": "speech/voices/uk/dictionary-MODEL_CARD.txt",
+      "sha256": "136e7bd168b6c35b4a5df01a0253297e5773b5775ceae0af5160f264aa58208f",
+      "bytes": 468
+    },
+    {
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_US/kristin/medium/en_US-kristin-medium.onnx",
+      "path": "speech/voices/us/dictionary-voice.onnx",
+      "sha256": "5849957f929cbf720c258f8458692d6103fff2f0e3d3b19c8259474bb06a18d4",
       "bytes": 63531379
     },
     {
-      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_GB/cori/medium/en_GB-cori-medium.onnx.json",
-      "path": "speech/voices/uk/voice.onnx.json",
-      "sha256": "e262c16d7f192f69d4edd6b4ef8a5915379e67495fcc402f1ab15eeb33da3d36",
-      "bytes": 4966
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_US/kristin/medium/en_US-kristin-medium.onnx.json",
+      "path": "speech/voices/us/dictionary-voice.onnx.json",
+      "sha256": "5681426d4aead22195de70531eeeeddb46493cfaffc5764b2ea3db73428b651c",
+      "bytes": 4968
     },
     {
-      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_GB/cori/medium/MODEL_CARD",
-      "path": "speech/voices/uk/MODEL_CARD.txt",
-      "sha256": "38d76dfde845837b184668f8bab1c6426ad740b1af0fcebc349037822739e536",
-      "bytes": 474
-    },
-    {
-      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx",
-      "path": "speech/voices/us/voice.onnx",
-      "sha256": "6f52a751e2349abe7a76735eb09dc1875298c77ea2342ffd2fef79ff81b87f22",
-      "bytes": 63531379
-    },
-    {
-      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_US/ljspeech/medium/en_US-ljspeech-medium.onnx.json",
-      "path": "speech/voices/us/voice.onnx.json",
-      "sha256": "141d612cc0a95ed7efc1ca936b845c2364967f2e9217c5dbfcf69fc4d6c65860",
-      "bytes": 4972
-    },
-    {
-      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_US/ljspeech/medium/MODEL_CARD",
-      "path": "speech/voices/us/MODEL_CARD.txt",
-      "sha256": "fbee1529c89d36b3fe76d7e9f3f832dce17f44900a52d76a9bda735654766b4d",
-      "bytes": 517
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_US/kristin/medium/MODEL_CARD",
+      "path": "speech/voices/us/dictionary-MODEL_CARD.txt",
+      "sha256": "8c181b1d5f7d8152b914faab941fcbe6b8f0495e63e5189d6f27b8c68c8393fc",
+      "bytes": 479
     },
     {
       "url": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip",

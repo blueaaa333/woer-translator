@@ -2,6 +2,7 @@ import atexit,hashlib,json,os,subprocess,threading,wave,queue,time,sys,platform
 from pathlib import Path
 from lexicon import normalize_query,valid_query
 from recorded_audio import Recordings
+from voice_profile import voice_files
 
 def phonetic_labels(result):
     target=normalize_query(result['word']).replace(' ','-').lower()
@@ -49,15 +50,14 @@ class SpeechEngine:
                 return audio
         if sys.platform=='darwin':return self.render_system_voice(word,accent)
         folder=self.root/'voices'/('uk' if accent==1 else 'us')
-        model=folder/'voice.onnx';config_path=folder/'voice.onnx.json'
-        if not config_path.is_file():raise SpeechUnavailable('请在“···”中下载英美离线语音，首次约150 MB')
-        config=json.loads(config_path.read_text(encoding='utf-8'))
+        try:model,config_path,config,upgraded,config_hash=voice_files(folder,accent)
+        except FileNotFoundError:raise SpeechUnavailable('请在“···”下载或升级英美离线语音，约200 MB')
         expected='en_GB' if accent==1 else 'en_US'
-        if config.get('language',{}).get('code')!=expected:raise ValueError('Voice accent does not match button')
+        length_scale='1.0' if upgraded else '1.05'
         executable=next((p for p in [self.root/'runtime'/'piper'/'piper.exe',self.root/'runtime'/'piper.exe'] if p.exists()),None)
         if executable is None:raise SpeechUnavailable('请在“···”中下载英美离线语音')
         self.cache.mkdir(parents=True,exist_ok=True)
-        key=f'{expected}|{config.get("dataset")}|{model.stat().st_size}|{model.stat().st_mtime_ns}|{word.lower()}'
+        key=f'dictionary-profile-v1|{expected}|{config_hash}|{length_scale}|{config.get("dataset")}|{model.stat().st_size}|{model.stat().st_mtime_ns}|{word.lower()}'
         target=self.cache/(hashlib.sha256(key.encode()).hexdigest()+'.wav')
         if target.exists() and self.valid_wave(target):return target
         # This upstream Windows runtime uses narrow file paths. Pass ASCII-only
@@ -67,19 +67,23 @@ class SpeechEngine:
         with self.lock:
             if self.closed.is_set():raise RuntimeError('Speech engine closed')
             server=self.servers.get(accent)
+            signature=(str(model),model.stat().st_mtime_ns,config_hash,length_scale)
+            if server is not None and server.get('signature')!=signature:
+                if server['proc'].poll() is None:server['proc'].terminate()
+                self.processes.discard(server['proc']);server=None
             if server is None or server['proc'].poll() is not None:
-                command=[str(executable),'--model',os.path.relpath(model,executable.parent),'--config',os.path.relpath(config_path,executable.parent),'--espeak_data','espeak-ng-data','--json-input','--length_scale','1.05','--quiet']
+                command=[str(executable),'--model',os.path.relpath(model,executable.parent),'--config',os.path.relpath(config_path,executable.parent),'--espeak_data','espeak-ng-data','--json-input','--length_scale',length_scale,'--quiet']
                 proc=subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,creationflags=0x08000000 if os.name=='nt' else 0,cwd=executable.parent)
                 responses=queue.Queue()
                 def reader():
                     for line in proc.stdout:responses.put(line.decode('utf-8',errors='replace').strip())
                     responses.put(None)
                 threading.Thread(target=reader,daemon=True).start()
-                server=dict(proc=proc,responses=responses,last=time.monotonic())
+                server=dict(proc=proc,responses=responses,last=time.monotonic(),signature=signature)
                 self.servers[accent]=server;self.processes.add(proc)
             server['last']=time.monotonic();proc=server['proc']
             try:
-                request=dict(text=word,output_file='_speech_tmp/'+temporary.name)
+                request=dict(text=word+'.' if upgraded else word,output_file='_speech_tmp/'+temporary.name)
                 proc.stdin.write((json.dumps(request)+'\n').encode('utf-8'));proc.stdin.flush()
                 answer=server['responses'].get(timeout=30)
                 if answer is None or Path(answer.replace('\\','/')).name!=temporary.name or not self.valid_wave(temporary):raise RuntimeError('Offline synthesis failed')

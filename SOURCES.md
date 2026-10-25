@@ -51,3 +51,7 @@ ECDICT, exam PDFs, PDF-derived entries, legacy private API integrations, browser
 ## Optional human pronunciation (v0.3.3)
 
 Recordings are fetched from Wikimedia Commons only after checking the exact word/accent filename and each file's author, reusable Creative Commons licence URL, restrictions, size, duration and SHA-1. Audio is not part of this repository or installers. User-local caches preserve original files, PCM conversions and per-file attribution; CC BY-SA recordings retain their source licence. See [speech sources and terms](docs/SPEECH.md). The decoder is [miniaudio 1.71](https://pypi.org/project/miniaudio/1.71/), with its exact package and dependency notices collected at build time.
+
+## Selected offline voices (v0.3.6)
+
+The optional Windows upgrade downloads en_GB-cori-high and en_US-kristin-medium from the fixed Piper voice revision in scripts/speech-downloads.json. The upstream model cards identify LibriVox / public-domain training data and from-scratch training. The original cards are retained in licenses/dictionary-voice-uk-MODEL_CARD.txt and licenses/dictionary-voice-us-MODEL_CARD.txt; the voice repository declares MIT. Original training-time phonemizer configurations are preserved. We do not redistribute model weights or the optional Piper runtime in the repository/installers, and do not use Bing dictionary audio. This is a synthesis option, not a claim of commercial-dictionary equivalence or an assurance covering all possible upstream rights.

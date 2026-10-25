@@ -17,7 +17,7 @@
 | PyObjC | Mac 安装包系统接口桥接 | MIT；构建时保留 pyobjc-core 与各框架分发包的许可原文 |
 | PyInstaller 启动器 | 冻结安装包 | GPL-2.0-or-later 加 bootloader exception；例外允许分发不同许可应用，原许可全文随包保留，不将构建工具整体当作本项目代码 |
 | Piper 2023.11.14-2 / Piper Phonemize | 可选下载配置与独立进程适配代码，不分发运行二进制 | 上游 MIT 部分保留声明；其依赖包括 GPL-3.0 的 eSpeak NG，不能把整套运行包说成 MIT |
-| Cori / LJSpeech 声音模型 | 模型卡、固定版本与 SHA-256；不分发权重 | 上游仓库标注 MIT，模型卡将训练数据列为 public domain。使用者从上游直接下载并阅读相应条款 |
+| Cori High / Kristin Medium 声音模型（兼容旧 Cori / LJSpeech） | 模型卡、固定版本与 SHA-256；不分发权重 | 上游仓库标注 MIT，模型卡将训练数据列为 public domain。使用者从上游直接下载并阅读相应条款 |
 | 宣传图 | docs/promo.png | 本项目通过图像生成工具制作，含 ISC 许可的应用图标；不主张对通用图形或生成内容享有排他的商标权，图标许可继续适用 |
 
 完整来源、链接、文件校验值见 SOURCES.md、data/manifest.json、data/checksums.json、scripts/speech-downloads.json。

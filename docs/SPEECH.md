@@ -22,7 +22,7 @@ Mac 版使用系统自带 `/usr/bin/say` 和 `/usr/bin/afplay`，按语言区域
 
 ## Windows 本地回退
 
-英式使用 `en_GB-cori-medium`，美式使用 `en_US-ljspeech-medium`；两个按钮调用不同模型。它们是本机合成语音，不能保证所有专名、多音词或上下文中的重音都准确。
+新包英式使用 `en_GB-cori-high`，美式使用 `en_US-kristin-medium`；两个按钮调用不同模型，并保留各模型原始的音素前端配置。不能仅凭 language.code 把 espeak.voice 强改成另一名称，否则可能与模型训练时的音素系统不匹配。旧的 Cori Medium / LJSpeech Medium 文件继续作为兼容回退，不被覆盖。它们是本机合成语音，不能保证所有专名、多音词或上下文中的重音都准确。
 
 源码和桌面安装包不附带 Piper 二进制、eSpeak NG、ONNX Runtime 或模型权重。用户在软件菜单选择“下载英美离线语音”或执行 `python scripts/setup_speech.py` 后，才直接从上游下载，并核对固定 SHA-256。模型采用固定 Hugging Face 提交，运行时固定 Piper 2023.11.14-2 发布文件，具体见 `scripts/speech-downloads.json`。安装包下载到本机用户数据目录，源码脚本默认下载到源码目录。
 
@@ -30,10 +30,10 @@ Mac 版使用系统自带 `/usr/bin/say` 和 `/usr/bin/afplay`，按语言区域
 - [Piper 源码与 MIT 许可](https://github.com/rhasspy/piper/tree/2023.11.14-2)
 - [Piper Phonemize](https://github.com/rhasspy/piper-phonemize/tree/2023.11.14-2)
 - [eSpeak NG 与 GPL-3.0](https://github.com/rhasspy/espeak-ng)
-- [英式模型卡](https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_GB/cori/medium/MODEL_CARD)
-- [美式模型卡](https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/ljspeech/medium/MODEL_CARD)
+- [英式模型卡](https://huggingface.co/rhasspy/piper-voices/blob/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_GB/cori/high/MODEL_CARD)
+- [美式模型卡](https://huggingface.co/rhasspy/piper-voices/blob/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_US/kristin/medium/MODEL_CARD)
 
-两份模型卡把训练语料分别列为 LibriVox / LJ Speech，标注 public domain；声音仓库元数据标注 MIT。保留原模型卡，不声称声音或发音由本项目原创。
+两份模型卡将训练语料列为 LibriVox，标注 public domain；声音仓库元数据标注 MIT。保留原模型卡，不声称声音或发音由本项目原创。
 
 Piper 的开源许可不等于整套第三方依赖都采用 MIT。eSpeak NG 属于 GPL 组件；若未来分发含这些运行组件的安装包，需要针对实际二进制版本提供对应源码、必要构建信息及完整第三方声明。当前核查无法从历史构建的浮动依赖精确追溯全部二进制对应源码，因此本次不重新分发这些运行包。
 
@@ -48,3 +48,11 @@ Piper 的开源许可不等于整套第三方依赖都采用 MIT。eSpeak NG 属
 ## 发音响应优化（v0.3.5）
 
 查词后可在后台静默打开输出设备，不会发声或增加查询词的联网发送。连续播放复用同一设备，闲置 30 秒关闭，退出应用时立即关闭；改选设备后切换连接。PCM 缓存最多 16 条且不超过 8 MB，文件大小或修改时间变化时重新解码。录音查询结果（包括不存在对应录音）缓存 24 小时；已下载录音仍沿用逐文件校验及署名。首次下载录音的网络等待、蓝牙和声卡的实际输出缓冲无法完全消除。检查信息中的 first_pcm_ms 是当前播放处理到首次提交 PCM 的时间，不含录音获取时间，也不等于声音抵达人耳的时间。
+
+## 统一合成音色（v0.3.6）
+
+从设置主动下载／升级约200 MB 的新包；新文件保存为各口音目录中的 dictionary-voice.onnx 和配置，保留原模型卡，不覆盖旧 voice.onnx。安装时跳过与固定上游压缩包完全相同的运行文件，避免重写正在使用的运行程序；模型与运行文件仍需通过 SHA-256。完成后自动关闭“优先真人发音（联网）”，使用刚下载的统一合成音色；可自行重新打开真人录音选项。朗读开关、默认口音、输出设备和生词本保持原选择。
+
+原始模型前端保留不变。本次撤回了试验中强改 en-us 的做法；文件标记为 en_US 不等于必须改写其训练时的 phonemizer。短词补句末标点以提供完整 utterance，语速保持正常；这不是商业词典原声，也不能证明所有重音或多音词均正确。
+
+没有接入或复制必应词典音频：微软服务协议的 Bing and MSN 条款没有授予把其中素材用于自有产品的通用权限。条款：https://www.microsoft.com/en-us/servicesagreement 。官方词典录音接入需要另行许可。
