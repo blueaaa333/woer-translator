@@ -233,6 +233,7 @@ class App:
    popup.destroy()
   self.button(body,'开始查词',done).pack(anchor='e',pady=(8,0));popup.protocol('WM_DELETE_WINDOW',done)
   popup.update_idletasks();popup.geometry(f'+{max(20,self.root.winfo_x()+15)}+{max(40,self.root.winfo_y()+15)}')
+  self.watch_mac_window(popup)
  def on_error(self,exc,value,tb):
   write_error('interface',exc,value,tb)
   try:self.status.config(text='操作未完成，错误已记录')
@@ -393,6 +394,7 @@ class App:
   quit=self.button(f,'退出应用',self.root.destroy,small=True);quit.config(fg='#8d6669');quit.pack(anchor='w')
   m.update_idletasks();self.settings_size=(max(round(258*self.scale),f.winfo_reqwidth()+2),f.winfo_reqheight()+2)
   self.position_settings();self.round_window(m,15);m.deiconify()
+  self.watch_mac_window(m)
   m.bind('<Escape>',lambda e:m.destroy())
  def follow_settings(self,event):
   if event.widget is self.root:self.position_settings()
@@ -406,6 +408,19 @@ class App:
   y=bottom+gap if bottom+gap+height<=rect.bottom-4 else top-gap-height
   y=max(rect.top+4,min(y,rect.bottom-height-4))
   m.geometry(f'{width}x{height}{x:+d}{y:+d}')
+  if not IS_WINDOWS:self.sync_mac_regions()
+ def sync_mac_regions(self):
+  if IS_WINDOWS:return
+  regions=[]
+  for win in (self.popup,self.settings_popup,getattr(self,'welcome_popup',None)):
+   if win and win.winfo_exists() and win.winfo_ismapped():
+    regions.append(dict(left=win.winfo_rootx(),top=win.winfo_rooty(),right=win.winfo_rootx()+win.winfo_width(),bottom=win.winfo_rooty()+win.winfo_height()))
+  mac.update_regions(regions)
+ def watch_mac_window(self,win):
+  if IS_WINDOWS:return
+  win.bind('<Configure>',lambda e:self.sync_mac_regions() if e.widget is win else None,add='+')
+  win.bind('<Destroy>',lambda e:self.root.after_idle(self.sync_mac_regions) if e.widget is win else None,add='+')
+  self.sync_mac_regions()
  def work_area(self,x,y):
   if not IS_WINDOWS:
    from types import SimpleNamespace
@@ -465,6 +480,7 @@ class App:
    except tk.TclError:pass
    p.deiconify();p.update_idletasks()
   self.round_window(p,14)
+  self.watch_mac_window(p)
   if source:record_stage('popup_shown',id=source['id'],latency_ms=round(time.time()*1000-source['emitted']))
   if source and IS_WINDOWS:
    def check_visibility():
@@ -626,7 +642,7 @@ class App:
     elif kind=='hotkey_source':
      self.selection_version+=1;self.query_source(value,anchor=(value['x']-10,value['y']-24))
     elif kind=='mac_query_result':self.finish_mac_query(value)
-    elif kind=='mac_bridge_ready':self.native_ready=True
+    elif kind=='mac_bridge_ready':self.native_ready=True;self.sync_mac_regions()
     elif kind=='voices_ready':self.voice_installing=False;self.status.config(text=value)
     elif kind=='selection':
      if self.selection.get():self.prompt(value)

@@ -33,6 +33,9 @@ def stop_monitor():
 
 def ready():return bool(_client and _client.ready.is_set())
 
+def update_regions(regions):
+    if _client:_client.send('regions',regions=regions)
+
 def work_area(x,y):
     areas=[SimpleNamespace(**r) for r in _client.areas()] if _client else []
     for area in areas:

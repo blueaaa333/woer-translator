@@ -12,6 +12,11 @@ IGNORED_BUNDLES = {'com.apple.finder', 'com.apple.dock', 'com.apple.loginwindow'
                    'com.apple.systempreferences', 'com.apple.systemuiserver'}
 
 
+def over_own_window(raw, regions):
+    return raw['type'] != 'key' and any(r['left'] <= raw['x'] < r['right'] and
+                                       r['top'] <= raw['y'] < r['bottom'] for r in regions)
+
+
 class Gestures:
     def __init__(self, own_pids):
         self.own_pids = set(own_pids)
@@ -67,6 +72,7 @@ def run():
     gestures = Gestures({os.getpid(), parent_pid})
     tap = source_ref = last_permissions = pending = sequence = last_screens = None
     last_clipboard = last_heartbeat = last_permissions_check = 0
+    regions = []
 
     def emit(kind, **fields):
         stream.write((json.dumps(dict(kind=kind, **fields), ensure_ascii=False)+'\n').encode('utf-8'))
@@ -134,6 +140,10 @@ def run():
                        clicks=Q.CGEventGetIntegerValueField(event, Q.kCGMouseEventClickState),
                        key=Q.CGEventGetIntegerValueField(event, Q.kCGKeyboardEventKeycode),
                        command=bool(flags & Q.kCGEventFlagMaskCommand), option=bool(flags & Q.kCGEventFlagMaskAlternate))
+            # A nonactivating toolbar leaves the browser frontmost. Filter by
+            # its bounds at capture time, before a click can hide the toolbar.
+            if over_own_window(raw, regions):
+                return event
             try:
                 raw_events.put_nowait(raw)
             except queue.Full:
@@ -151,6 +161,11 @@ def run():
                     last_heartbeat = now
                 if now-last_permissions_check >= 2:
                     access = permissions()
+                    if tap and not (access['input_monitoring'] or access['accessibility']):
+                        Q.CGEventTapEnable(tap, False)
+                        CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source_ref, kCFRunLoopCommonModes)
+                        CFMachPortInvalidate(tap)
+                        tap = source_ref = None
                     if not tap and (access['input_monitoring'] or access['accessibility']):
                         mask = sum(1 << int(kind) for kind in (Q.kCGEventLeftMouseDown, Q.kCGEventLeftMouseUp,
                                                               Q.kCGEventRightMouseUp, Q.kCGEventKeyDown))
@@ -180,6 +195,8 @@ def run():
                         if hasattr(Q, 'CGRequestListenEventAccess'):
                             Q.CGRequestListenEventAccess()
                         last_permissions_check = 0
+                    elif command['kind'] == 'regions':
+                        regions = command['regions']
                     elif command['kind'] == 'self_test_pause' and '--native-self-test' in sys.argv:
                         time.sleep(2)
                         emit('self_test_resumed')
@@ -230,6 +247,9 @@ def run():
                     if result:
                         emit(result[0], value=result[1])
                 CFRunLoopRunInMode(kCFRunLoopDefaultMode, .025, True)
+                # A run loop without any event source may return immediately.
+                if not tap:
+                    stop.wait(.025)
     finally:
         if tap:
             Q.CGEventTapEnable(tap, False)

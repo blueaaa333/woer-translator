@@ -4,7 +4,7 @@ import threading
 import unittest
 from unittest.mock import Mock, patch
 from mac_bridge import MacBridge
-from mac_native import Gestures
+from mac_native import Gestures, over_own_window
 
 
 class MacGestureTests(unittest.TestCase):
@@ -31,6 +31,12 @@ class MacGestureTests(unittest.TestCase):
         self.assertIsNone(tracker.handle(self.raw('up', x=180), (10, 'our.app')))
         self.assertEqual(tracker.handle(self.raw('up', x=180), (12, 'com.browser'))[0], 'clear')
         self.assertIsNone(tracker.handle(self.raw('up', clicks=2), (12, 'com.apple.finder')))
+
+    def test_nonactivating_toolbar_click_is_filtered_before_hiding(self):
+        regions = [dict(left=100, top=100, right=400, bottom=145)]
+        self.assertTrue(over_own_window(self.raw('up', x=150, y=120), regions))
+        self.assertFalse(over_own_window(self.raw('up', x=150, y=120), []))
+        self.assertFalse(over_own_window(self.raw('key', x=150, y=120), regions))
 
 
 class MacBridgeTests(unittest.TestCase):
