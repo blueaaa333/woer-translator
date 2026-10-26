@@ -83,6 +83,7 @@ def hotkeys():
    else:events.put(('show','未能复制选区，请选中单词后重试，或复制后查词'))
 bridge_stop=threading.Event()
 selection_enabled=threading.Event()
+compatibility_enabled=threading.Event()
 managed=set();managed_lock=threading.Lock()
 def start_bridge(args,**kwargs):
  proc=subprocess.Popen([str(BASE/'DesktopBridge.exe')]+args,creationflags=0x08000000,**kwargs)
@@ -138,7 +139,8 @@ def selection_monitor_once():
    if not selection_enabled.is_set():continue
    pid=f[0]
    if pid not in cache:cache[pid]=source_process(pid)
-   if cache[pid] not in {'msedge','chrome','firefox','qianwen','360se','360chrome','qqbrowser','quark','acrobat','acrord32','sumatrapdf','wps','winword','notepad','notepad++','pdfxedit','foxitpdfreader'}:continue
+   from selection_apps import supported_process
+   if not supported_process(cache[pid],compatibility_enabled.is_set()):continue
    event=dict(pid=int(f[0]),hwnd=int(f[1]),x=int(f[2]),y=int(f[3]),id=int(f[4]),emitted=int(f[5]),word='')
    events.put(('gesture',event));record_stage('gesture_received',id=event['id'],source_pid=event['pid'],app=cache[pid])
  try:
@@ -239,6 +241,7 @@ class App:
   self.select_tab('definition')
   self.selection=tk.BooleanVar(value=self.preferences.get('selection',True));self.auto=tk.BooleanVar(value=self.preferences.get('copy_prompt',True))
   if self.selection.get():selection_enabled.set()
+  compatibility_enabled.set() if self.preferences.get('selection_compatibility',True) else compatibility_enabled.clear()
   self.selection.trace_add('write',lambda *args:self.save_preferences());self.auto.trace_add('write',lambda *args:self.save_preferences())
   if not testing:
    threading.Thread(target=hotkeys,daemon=True).start();threading.Thread(target=selection_monitor,daemon=True).start()
@@ -406,6 +409,11 @@ class App:
    self.selection.set(not self.selection.get())
    selection_enabled.set() if self.selection.get() else selection_enabled.clear()
   toggle('选中后显示浮条',self.selection.get,select_toggle)
+  if IS_WINDOWS:
+   def compatibility_toggle():
+    self.preferences['selection_compatibility']=not self.preferences.get('selection_compatibility',True);self.save_preferences()
+    compatibility_enabled.set() if self.preferences['selection_compatibility'] else compatibility_enabled.clear()
+   toggle('更多应用划词（兼容模式）',lambda:self.preferences.get('selection_compatibility',True),compatibility_toggle)
   toggle('复制后显示浮条',self.auto.get,lambda:self.auto.set(not self.auto.get()))
   tk.Frame(f,bg='#edf1f4',height=1).pack(fill='x',pady=(10,2))
   section('发音偏好')
