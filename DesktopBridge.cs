@@ -121,7 +121,8 @@ class DesktopBridge {
   life.Tick+=(s,e)=>{try {if(Process.GetProcessById(parent).HasExited)Application.Exit();}catch{Application.Exit();}};life.Start();
   hook=SetWindowsHookEx(14,mouseProc,GetModuleHandle(null),0);
   keyHook=SetKeyHook(13,keyProc,GetModuleHandle(null),0);
-  if(hook==IntPtr.Zero)Environment.Exit(3);
+  if(hook==IntPtr.Zero){Console.Error.WriteLine("MOUSE_HOOK_FAILED");Environment.Exit(3);}
+  Console.WriteLine("READY");Console.Out.Flush();
   try {Application.Run();}finally{UnhookWindowsHookEx(hook);if(keyHook!=IntPtr.Zero)UnhookWindowsHookEx(keyHook);}
  }
  static int Speak(string accent,string word,bool list) {

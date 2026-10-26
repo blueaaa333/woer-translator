@@ -41,7 +41,10 @@ try:
         labels=[w.cget('text') for w in descendants(app.audio_window) if w.winfo_class()=='Button']
         assert '播放测试音' in labels and '复制声音检查信息' in labels
         app.audio_window.destroy()
+    assert app.text.cget('highlightthickness') == 0
+    assert app.menu_button.cget('highlightthickness') == 0
     if sys.platform=='darwin':
+        assert app.permission_banner.winfo_ismapped()
         app.mac_welcome();app.root.update()
         assert app.welcome_popup.winfo_exists()
         app.welcome_popup.destroy()

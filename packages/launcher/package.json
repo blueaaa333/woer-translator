@@ -1,13 +1,30 @@
 {
   "name": "@blueaaa333/woer-translator",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Download and verify official Woer Translator desktop installers for Windows and macOS",
   "license": "MIT",
-  "repository": {"type": "git", "url": "https://github.com/blueaaa333/woer-translator.git", "directory": "packages/launcher"},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/blueaaa333/woer-translator.git",
+    "directory": "packages/launcher"
+  },
   "homepage": "https://github.com/blueaaa333/woer-translator",
-  "bin": {"woer-translator": "cli.cjs"},
-  "files": ["cli.cjs", "README.md", "LICENSE"],
-  "engines": {"node": ">=20"},
-  "scripts": {"test": "node --test test.cjs"},
-  "publishConfig": {"registry": "https://npm.pkg.github.com", "access": "public"}
+  "bin": {
+    "woer-translator": "cli.cjs"
+  },
+  "files": [
+    "cli.cjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test.cjs"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  }
 }

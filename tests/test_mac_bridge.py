@@ -50,6 +50,13 @@ class MacBridgeTests(unittest.TestCase):
         bridge.receive(dict(kind='gesture', value={'id': 2}))
         self.assertEqual(bridge.events.get_nowait(), ('gesture', {'id': 2}))
 
+    def test_permissions_reach_the_ui(self):
+        bridge = MacBridge(queue.Queue(), threading.Event(), threading.Event(), '.')
+        state = dict(accessibility=False, input_monitoring=True, listening=True)
+        bridge.receive(dict(kind='permissions', value=state))
+        self.assertEqual(bridge.permissions, state)
+        self.assertEqual(bridge.events.get_nowait(), ('mac_permissions', state))
+
     def test_query_is_queued_and_backpressure_cannot_block_ui(self):
         bridge = MacBridge(queue.Queue(), threading.Event(), threading.Event(), '.')
         self.assertTrue(bridge.send('query', pid=12, version=3))

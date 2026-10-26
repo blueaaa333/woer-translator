@@ -57,6 +57,7 @@ class MacBridge:
         elif kind == 'permissions':
             with self.lock:
                 self.permissions = message['value']
+            self.events.put(('mac_permissions',dict(message['value'])))
         elif kind == 'self_test_resumed':
             self.test_resumed.set()
         elif kind == 'self_test_started':

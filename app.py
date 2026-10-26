@@ -113,7 +113,7 @@ def source_process(pid):
   k.QueryFullProcessImageNameW.argtypes=[C.c_void_p,C.c_ulong,C.c_wchar_p,C.POINTER(C.c_ulong)]
   return Path(buf.value).stem.lower() if k.QueryFullProcessImageNameW(handle,0,buf,C.byref(length)) else ''
  finally:k.CloseHandle(handle)
-def selection_monitor():
+def selection_monitor_once():
  if not IS_WINDOWS:
   mac.monitor(events,selection_enabled,bridge_stop);return
  # Browser PDF accessibility ranges may point to unrelated text on the page.
@@ -124,6 +124,8 @@ def selection_monitor():
   for line in watch.stdout:
    if bridge_stop.is_set():break
    f=line.decode('utf-8-sig').strip().split('|')
+   if f[0]=='READY':
+    record_stage('listener_ready');continue
    if f[0]=='CLEAR':
     if len(f)==4 and f[2].isdigit() and f[3].isdigit():
      detail=dict(reason=f[1],at=int(f[2]),pid=int(f[3]));events.put(('clear',detail));record_stage('clear_received',**detail)
@@ -138,6 +140,8 @@ def selection_monitor():
  try:
   watch=start_bridge(['watch',str(os.getpid())],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
   read_watch()
+  if not bridge_stop.is_set():
+   record_stage('listener_exited',exit_code=watch.wait(timeout=2));events.put(('status','划词监听已退出：请在···打开划词状态与排查'))
  except Exception as exc:
   record_stage('listener_error',error=type(exc).__name__);events.put(('status','自动检测暂不可用，复制单词也可弹出查询'))
  finally:
@@ -145,6 +149,16 @@ def selection_monitor():
    if proc:
     if proc.poll() is None:proc.terminate()
     forget(proc)
+def selection_monitor():
+ if not IS_WINDOWS:
+  selection_monitor_once();return
+ for attempt in range(3):
+  if bridge_stop.is_set():return
+  selection_monitor_once()
+  if bridge_stop.wait(min(1+attempt*2,5)):return
+  if attempt<2:events.put(('status','划词监听中断，正在重新启动…'))
+ events.put(('status','划词监听未就绪，请在···打开划词状态与排查；复制查词仍可使用'))
+
 class App:
  def __init__(self,testing=False):
   self.lexicon=Lexicon(BASE);self.db=self.lexicon.db;self.result=None;self.online=None;self.use_online=False;self.word='';self.seq=clipboard_sequence();self.popup=None;self.testing=testing
@@ -171,6 +185,9 @@ class App:
   self.button(head,'×',self.hide,small=True).pack(side='left')
   tk.Label(head,text='英文  ⇄  中文',bg='white',fg='#5b6d78',font=(UI_FONT,10)).pack(side='left',expand=True)
   self.menu_button=self.button(head,'···',self.menu,small=True);self.menu_button.pack(side='right')
+  if not IS_WINDOWS:
+   self.permission_banner=self.button(f,'启用 Mac 划词：允许辅助功能和输入监控',lambda:mac.request_permissions(events),small=True)
+   self.permission_banner.pack(fill='x',pady=(0,5))
   self.root.bind('<Configure>',self.follow_settings)
   for target in [head]:
    target.bind('<ButtonPress-1>',lambda e:setattr(self,'drag',(e.x_root-self.root.winfo_x(),e.y_root-self.root.winfo_y())))
@@ -197,7 +214,7 @@ class App:
   area=tk.Frame(f,bg='white');area.pack(fill='both',expand=True,pady=(3,4))
   style=ttk.Style();style.theme_use('clam');style.configure('Vertical.TScrollbar',troughcolor='white',background='#dceaf0',bordercolor='white',arrowcolor='#8da7b2',width=9)
   scroll=ttk.Scrollbar(area,orient='vertical');scroll.pack(side='right',fill='y')
-  self.text=tk.Text(area,wrap='word',width=1,height=7,bg='white',fg='#243e4a',relief='flat',bd=0,padx=2,pady=6,spacing3=3,font=(UI_FONT,12),yscrollcommand=scroll.set)
+  self.text=tk.Text(area,wrap='word',width=1,height=7,bg='white',fg='#243e4a',relief='flat',bd=0,padx=2,pady=6,spacing3=3,font=(UI_FONT,12),highlightthickness=0,yscrollcommand=scroll.set)
   self.text.pack(fill='both',expand=True);scroll.config(command=self.text.yview)
   self.text.tag_configure('pos',foreground='#82949c',font=(LATIN_FONT,12,'italic'))
   self.text.tag_configure('heading',foreground='#168fae',font=(UI_FONT,10,'bold'),spacing1=6,spacing3=4)
@@ -323,7 +340,7 @@ class App:
    self.more.pack(before=self.bottom,anchor='w',pady=(1,3))
   else:self.more.pack_forget()
  def button(self,parent,label,command,small=False):
-  b=tk.Button(parent,text=label,command=command,bg='white' if small else '#eafaff',fg='#536783' if small else '#149fbc',activebackground='#e4eeff',activeforeground='#2463db',relief='flat',bd=0,padx=4 if small else 8,pady=1 if small else 4,cursor='hand2',font=(UI_FONT,10))
+  b=tk.Button(parent,text=label,command=command,bg='white' if small else '#eafaff',fg='#536783' if small else '#149fbc',activebackground='#e4eeff',activeforeground='#2463db',relief='flat',bd=0,highlightthickness=0,padx=4 if small else 8,pady=1 if small else 4,cursor='hand2',font=(UI_FONT,10))
   b.bind('<Enter>',lambda e:b.config(bg='#eaf2ff'));b.bind('<Leave>',lambda e:b.config(bg='white' if small else '#eafaff'))
   return b
  def hide(self):
@@ -370,7 +387,7 @@ class App:
    row=tk.Frame(f,bg='white');row.pack(fill='x',pady=4)
    tk.Label(row,text=label,bg='white',fg='#405969',font=(UI_FONT,10)).pack(side='left')
    def click():action();render()
-   b=tk.Button(row,command=click,bd=0,relief='flat',cursor='hand2',padx=9,pady=3,font=(UI_FONT,9))
+   b=tk.Button(row,command=click,bd=0,highlightthickness=0,relief='flat',cursor='hand2',padx=9,pady=3,font=(UI_FONT,9))
    def render():
     enabled=getter();b.config(text='开启  ●' if enabled else '○  关闭',bg='#e2f1f4' if enabled else '#f0f3f6',fg='#28576b' if enabled else '#81909c',activebackground='#dfebef')
    render();b.pack(side='right');return b
@@ -380,6 +397,7 @@ class App:
   toggle('使用本地翻译服务',lambda:self.preferences.get('phrase_translation',False),translation_toggle)
   self.button(f,'本地翻译部署指南 ↗',lambda:__import__('webbrowser').open('https://github.com/blueaaa333/woer-translator/blob/main/docs/PHRASES.md'),small=True).pack(anchor='w',pady=3)
   section('划词与复制')
+  if IS_WINDOWS:self.button(f,'划词状态与排查',self.selection_diagnostics,small=True).pack(anchor='w',pady=3)
   def select_toggle():
    self.selection.set(not self.selection.get())
    selection_enabled.set() if self.selection.get() else selection_enabled.clear()
@@ -607,6 +625,11 @@ class App:
     except TranslationUnavailable as exc:value=str(exc);error=True
     events.put(('phrase_result',(serial,s,value,error)))
    threading.Thread(target=translate_job,daemon=True).start()
+ def selection_diagnostics(self):
+  from tkinter import messagebox
+  with managed_lock:running=any(p.poll() is None for p in managed)
+  status='正在运行' if running else '未运行或已退出'
+  messagebox.showinfo('划词状态与排查','选中显示浮条：'+('开启' if self.selection.get() else '关闭')+'\n划词监听：'+status+'\n组件：'+('存在' if (BASE/'DesktopBridge.exe').is_file() else '缺失，请重新安装')+'\n\n先在普通权限的浏览器选中英文测试。若不能弹出，请按 Ctrl+C 测试复制弹窗。浏览器以管理员权限运行时，普通权限软件可能无法读取。\n\n若监听未运行，请重新打开软件，并检查 Windows 安全中心是否隔离 DesktopBridge.exe。不要关闭系统防护。',parent=self.root)
  def audio_check(self):
   from audio_settings import show
   show(self,DATA)
@@ -699,6 +722,10 @@ class App:
      self.selection_version+=1;self.query_source(value,anchor=(value['x']-10,value['y']-24))
     elif kind=='mac_query_result':self.finish_mac_query(value)
     elif kind=='mac_bridge_ready':self.native_ready=True;self.sync_mac_regions()
+    elif kind=='mac_permissions':
+     if value.get('accessibility') and value.get('listening'):self.permission_banner.pack_forget()
+     else:
+      self.permission_banner.config(text='点击启用 Mac 划词权限 · 手动输入仍可查词');self.permission_banner.pack(before=self.card,fill='x',pady=(0,5))
     elif kind=='app_update':self.updates.receive(value)
     elif kind=='voices_installed':
      self.audio_serial+=1
