@@ -76,6 +76,19 @@ class MacBridgeTests(unittest.TestCase):
         fake.on_error.assert_called_once()
         fake.root.after.assert_called_once_with(25, fake.poll)
 
+    def test_busy_clipboard_is_retried_without_consuming_sequence(self):
+        from app import App,ClipboardBusy,events
+        fake=Mock();fake.seq=10;fake.clipboard_suppress_until=0
+        while not events.empty():events.get_nowait()
+        with patch('app.clipboard_sequence',return_value=11),patch('app.clipboard',side_effect=[ClipboardBusy(),'water']):
+            App.poll(fake)
+            self.assertEqual(fake.seq,10)
+            fake.prompt.assert_not_called()
+            App.poll(fake)
+            self.assertEqual(fake.seq,11)
+            fake.prompt.assert_called_once_with('water')
+        fake.on_error.assert_not_called()
+
     def test_stale_query_cannot_replace_a_newer_selection(self):
         from app import App
         fake = Mock()

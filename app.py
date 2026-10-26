@@ -46,9 +46,13 @@ else:u=k=None
 def clipboard_sequence():return u.GetClipboardSequenceNumber() if IS_WINDOWS else mac.clipboard_sequence()
 
 events=queue.Queue()
-def clipboard():
+class ClipboardBusy(Exception):pass
+
+def clipboard(strict=False):
  if not IS_WINDOWS:return mac.clipboard_text()
- if not u.OpenClipboard(None): return ''
+ if not u.OpenClipboard(None):
+  if strict:raise ClipboardBusy()
+  return ''
  try:
   h=u.GetClipboardData(13)
   if not h:return ''
@@ -629,7 +633,7 @@ class App:
   from tkinter import messagebox
   with managed_lock:running=any(p.poll() is None for p in managed)
   status='正在运行' if running else '未运行或已退出'
-  messagebox.showinfo('划词状态与排查','选中显示浮条：'+('开启' if self.selection.get() else '关闭')+'\n划词监听：'+status+'\n组件：'+('存在' if (BASE/'DesktopBridge.exe').is_file() else '缺失，请重新安装')+'\n\n先在普通权限的浏览器选中英文测试。若不能弹出，请按 Ctrl+C 测试复制弹窗。浏览器以管理员权限运行时，普通权限软件可能无法读取。\n\n若监听未运行，请重新打开软件，并检查 Windows 安全中心是否隔离 DesktopBridge.exe。不要关闭系统防护。',parent=self.root)
+  messagebox.showinfo('划词状态与排查','版本：'+self.current_version+'\n复制显示浮条：'+('开启' if self.auto.get() else '关闭')+'\n选中显示浮条：'+('开启' if self.selection.get() else '关闭')+'\n划词监听：'+status+'\n组件：'+('存在' if (BASE/'DesktopBridge.exe').is_file() else '缺失，请重新安装')+'\n\n先在普通权限的浏览器选中英文测试。若不能弹出，请按 Ctrl+C 测试复制弹窗。浏览器以管理员权限运行时，普通权限软件可能无法读取。\n\n若监听未运行，请重新打开软件，并检查 Windows 安全中心是否隔离 DesktopBridge.exe。不要关闭系统防护。',parent=self.root)
  def audio_check(self):
   from audio_settings import show
   show(self,DATA)
@@ -701,8 +705,12 @@ class App:
   try:
    seq=clipboard_sequence()
    if seq!=self.seq:
-    self.seq=seq
-    if self.auto.get() and time.monotonic()>=self.clipboard_suppress_until:self.prompt(clipboard())
+    if self.auto.get() and time.monotonic()>=self.clipboard_suppress_until:
+     try:value=clipboard(strict=True)
+     except ClipboardBusy:pass
+     else:
+      self.seq=seq;self.prompt(value)
+    else:self.seq=seq
    deadline=time.monotonic()+.008
    while not events.empty() and time.monotonic()<deadline:
     kind,value=events.get_nowait()

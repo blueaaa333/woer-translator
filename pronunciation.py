@@ -51,7 +51,10 @@ class SpeechEngine:
         if sys.platform=='darwin':return self.render_system_voice(word,accent)
         folder=self.root/'voices'/('uk' if accent==1 else 'us')
         try:model,config_path,config,upgraded,config_hash=voice_files(folder,accent)
-        except FileNotFoundError:raise SpeechUnavailable('请在“···”下载或升级英美离线语音，约200 MB')
+        except FileNotFoundError:
+            label='英式' if accent==1 else '美式'
+            prefix='本次未取得'+label+'真人录音，且' if self.prefer_recordings else ''
+            raise SpeechUnavailable(prefix+label+'离线语音尚未安装；请在“···”下载或升级语音（约200 MB）')
         expected='en_GB' if accent==1 else 'en_US'
         length_scale='1.0' if upgraded else '1.05'
         executable=next((p for p in [self.root/'runtime'/'piper'/'piper.exe',self.root/'runtime'/'piper.exe'] if p.exists()),None)

@@ -47,9 +47,19 @@ def show(app, data):
         threading.Thread(target=worker,daemon=True).start()
     button=app.button(body,'播放测试音',test);button.pack(anchor='w',pady=4)
     app.button(body,'打开 Windows 音量混合器 ↗',lambda:os.startfile('ms-settings:apps-volume'),small=True).pack(anchor='w',pady=4)
+    def voice_status():
+        from voice_profile import voice_files
+        result={}
+        for accent,label in ((1,'uk'),(2,'us')):
+            try:
+                voice_files(app.speech.root/'voices'/label,accent);result[label]='installed'
+            except FileNotFoundError:result[label]='not_installed'
+            except Exception:result[label]='invalid_configuration'
+        result['runtime']=any(p.is_file() for p in (app.speech.root/'runtime'/'piper'/'piper.exe',app.speech.root/'runtime'/'piper.exe'))
+        return result
     def copy():
         report=dict(version=getattr(app,'current_version','私人安装版'),output=dict(app.player.last),
-                    selected_device=chosen.get(),legacy=legacy.get(),status=status.cget('text'))
+                    selected_device=chosen.get(),legacy=legacy.get(),status=status.cget('text'),voices=voice_status(),prefer_recordings=app.preferences.get('prefer_recordings',True))
         app.root.clipboard_clear();app.root.clipboard_append(json.dumps(report,ensure_ascii=False,indent=2))
         status.config(text='检查信息已复制，可粘贴给维护者。不含查询词或录音。')
     app.button(body,'复制声音检查信息',copy,small=True).pack(anchor='w',pady=4)
