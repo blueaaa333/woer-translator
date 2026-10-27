@@ -1,10 +1,16 @@
 Woer Translator / 沃尔翻译官
 
-Original application code: MIT. Dictionary data, icons and runtime components
-retain their own licenses. See THIRD_PARTY_NOTICES.md and licenses/ in the
-application resources. This installer does not include Piper binaries or models.
-Speech dependencies are optional and downloaded directly from upstream only
-when the user chooses the download action in Settings.
+Original application code: MIT. Dictionary text, icons, recordings and runtime
+components retain their own licenses. See THIRD_PARTY_NOTICES.md and licenses/
+in the application resources. This installer includes no Piper/eSpeak runtime
+or voice-model weights. Optional speech resources are downloaded directly from
+upstream when the user chooses the download action in Settings.
+
+With online dictionary enabled, an explicit lookup sends that word or phrase
+to Wiktionary. Online pronunciation may send the word to Wikimedia Commons.
+The app does not upload whole pages, clipboard history or private dictionaries.
+Online features and automatic update checks can be disabled in Settings.
 
 Uninstalling preserves local settings, vocabulary lists and speech downloads.
-No clipboard text or query history is uploaded by the application.
+Open licences grant permission subject to their conditions, not a worldwide
+non-infringement warranty. See docs/LICENSE_AUDIT.md in the source repository.

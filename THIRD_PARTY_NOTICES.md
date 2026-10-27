@@ -39,3 +39,10 @@
 ## 在线维基词典
 
 通过 Wikimedia 官方 API 按需获取，词典文本及本软件的释义提取／繁简转换结果沿用 CC BY-SA 4.0。保留原词条、编辑历史与许可链接。与代码 MIT 许可分开标记。详见 [在线词典](docs/ONLINE_DICTIONARY.md)。不在源代码仓库分发用户在线缓存。
+
+
+## v0.3.11 原生运行库声明补齐
+
+解包核查 v0.3.10 时发现仅收集 Python 根许可证和 Python 包许可不足以覆盖所有附带原生库，尤其没有单独附 OpenSSL Apache-2.0 许可全文。本版增加与解释器版本对应的 CPython incorporated-software 声明、实际 OpenSSL 和 zlib 版本许可、Expat、libmpdec、libffi、bzip2 和 liblzma 的声明；原始 URL 与 SHA-256 记录于包内 licenses/runtime/native-components.json。SQLite 原生数据库使用上游公有领域代码，Python 绑定保留 Python 自身许可。Windows CRT 的发行声明保留在官方解释器的 Python-LICENSE.txt 中。Mac 系统库的调用不等于软件重新分发 Apple 系统组件。
+
+源码中的 licenses/native-reference/ 是本次核查参考文本，不冒充所有平台的实际 SBOM。实际安装包的版本以 build-info.json 及原生声明索引为准。以前版本的用户应升级到 v0.3.11，以取得补齐的声明；旧版本的许可收集缺口不能因补充一段说明就被宣称不存在。

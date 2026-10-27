@@ -51,4 +51,7 @@ def collect(destination):
         with urllib.request.urlopen(url,timeout=60) as response:notice=response.read()
         (destination/f'{component}-license.terms').write_bytes(notice)
     versions['Tcl']=str(patch)
+    from scripts.native_notices import collect as collect_native
+    native=collect_native(destination)
+    versions['OpenSSL']=native['openssl'];versions['zlib']=native['zlib'];versions['Expat']=native['expat']
     return versions

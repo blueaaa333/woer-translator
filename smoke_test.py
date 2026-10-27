@@ -8,7 +8,10 @@ def run(base):
     from recording_checks import exercise
     audio=exercise()
     assert Path(certifi.where()).is_file()
-    base=Path(base);lexicon=Lexicon(base)
+    base=Path(base)
+    from scripts.distribution_audit import audit
+    distribution=audit(base)
+    lexicon=Lexicon(base)
     assert '经过充分研究' in definition_sections(lexicon.lookup('well-researched'))['primary'][0]['text']
     assert lexicon.lookup('current')['community']
     for name in ('brand-18.png','沃尔翻译官.png'):assert (base/'assets'/name).is_file()
@@ -23,4 +26,4 @@ def run(base):
     for name in ('db','extra','community','exam'):
         connection=getattr(lexicon,name)
         if connection:connection.close()
-    return dict(platform=sys.platform,dictionaries='ok',assets='ok',native_imports='ok',audio=audio)
+    return dict(platform=sys.platform,dictionaries='ok',assets='ok',native_imports='ok',audio=audio,distribution=distribution)

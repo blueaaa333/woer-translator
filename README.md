@@ -12,6 +12,10 @@
 - 工具条停留在本次选词处；取消选区后收起。偏好菜单停靠在“···”附近。
 - 统一简体中文；自动朗读默认关闭，开启后会记住开关和英美口音。
 
+## 授权核查与版本
+
+请使用 v0.3.11 或更新版本。此次解包检查补齐了 OpenSSL 等原生运行库的许可声明，并加入发布阻断检查。代码 MIT 不覆盖第三方词库、音频或运行库；详见 [逐项核查报告](docs/LICENSE_AUDIT.md)。这是一份可追溯的许可检查，不是全球范围的零侵权保证。
+
 ## 开始使用
 
 [下载桌面安装包](https://github.com/blueaaa333/woer-translator/releases/latest)：Windows x64 安装器、Mac Apple 芯片版或 Intel 版 DMG。安装包内置解释器和公开词库，不需另装 Python。具体限制见 [发行说明](docs/RELEASE_NOTES.md)。
