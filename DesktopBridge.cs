@@ -80,26 +80,50 @@ class DesktopBridge {
   var document=root.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Document));
   return document==null?"":Read(document);
  }
+ static bool CheckSelectedRange(AutomationElement element,int x,int y,string expected) {
+  if(element==null)return false;
+  try {
+   if(element.Current.IsPassword)return false;
+   object pattern;if(!element.TryGetCurrentPattern(TextPattern.Pattern,out pattern))return false;
+   foreach(var range in ((TextPattern)pattern).GetSelection()) {
+    bool nonempty=range.CompareEndpoints(System.Windows.Automation.Text.TextPatternRangeEndpoint.Start,range,System.Windows.Automation.Text.TextPatternRangeEndpoint.End)!=0;
+    if(!nonempty)continue;
+    string text=NormalizeQuery(range.GetText(81));if(!ValidQuery(text))continue;
+    if(expected!=null) {if(String.Equals(text,NormalizeQuery(expected),StringComparison.OrdinalIgnoreCase))return true;}
+    else foreach(var rect in range.GetBoundingRectangles())if(ToolbarLifecyclePolicy.SelectionNear(new double[]{rect.X,rect.Y,rect.Width,rect.Height},x,y,true))return true;
+   }
+  }catch(ElementNotAvailableException){}catch(InvalidOperationException){}catch(COMException){}
+  return false;
+ }
+ static bool CheckSelectionAncestors(AutomationElement element,IntPtr hwnd,int x,int y,string expected) {
+  // PDF text leaves and the document provider can be separated by raw wrappers.
+  for(int depth=0;element!=null&&depth<16;depth++) {
+   if(CheckSelectedRange(element,x,y,expected))return true;
+   try {if(element.Current.IsPassword)return false;if(element.Current.NativeWindowHandle==hwnd.ToInt64())break;element=TreeWalker.RawViewWalker.GetParent(element);}
+   catch(ElementNotAvailableException){break;}catch(COMException){break;}
+  }
+  return false;
+ }
  static bool SelectionReady(uint pid,IntPtr hwnd,int x,int y,string expected) {
   if(GetForegroundWindow()!=hwnd)return false;
   uint actual;GetWindowThreadProcessId(hwnd,out actual);if(actual!=pid)return false;
   bool copying=expected!=null;
   if(!copying&&GetAncestor(WindowFromPoint(new POINT{X=x,Y=y}),2)!=hwnd)return false;
+  var root=AutomationElement.FromHandle(hwnd);
   AutomationElement element=copying?AutomationElement.FocusedElement:AutomationElement.FromPoint(new System.Windows.Point(x,y));
-  if(element==null)return false;
-  var role=element.Current.ControlType;
-  if(!copying&&(role==ControlType.ScrollBar||role==ControlType.Thumb||role==ControlType.Image||role==ControlType.Button||role==ControlType.Slider||role==ControlType.TitleBar))return false;
-  for(int depth=0;element!=null&&depth<6;depth++,element=TreeWalker.ControlViewWalker.GetParent(element)) {
+  if(element!=null) {
    if(element.Current.IsPassword)return false;
-   object pattern;
-   if(!element.TryGetCurrentPattern(TextPattern.Pattern,out pattern))continue;
-   foreach(var range in ((TextPattern)pattern).GetSelection()) {
-    bool nonempty=range.CompareEndpoints(System.Windows.Automation.Text.TextPatternRangeEndpoint.Start,range,System.Windows.Automation.Text.TextPatternRangeEndpoint.End)!=0;
-    if(!nonempty||!ValidQuery(NormalizeQuery(range.GetText(81))))continue;
-    if(copying) {
-     if(String.Equals(NormalizeQuery(range.GetText(81)),NormalizeQuery(expected),StringComparison.OrdinalIgnoreCase))return true;
-    } else {foreach(var rect in range.GetBoundingRectangles())if(ToolbarLifecyclePolicy.SelectionNear(new double[]{rect.X,rect.Y,rect.Width,rect.Height},x,y,nonempty))return true;}
-   }
+   var role=element.Current.ControlType;
+   if(!copying&&(role==ControlType.ScrollBar||role==ControlType.Thumb||role==ControlType.Button||role==ControlType.Slider||role==ControlType.TitleBar))return false;
+   if(CheckSelectionAncestors(element,hwnd,x,y,expected))return GetForegroundWindow()==hwnd;
+  }
+  // Chromium's PDF document is sometimes a sibling of the hit-tested surface,
+  // so walking only upward from the mouse cannot reach its TextPattern.
+  var documents=root.FindAll(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Document));
+  for(int i=0;i<documents.Count&&i<24;i++) {
+   var document=documents[i];
+   if(document.Current.IsOffscreen)continue;
+   if(CheckSelectedRange(document,x,y,expected))return GetForegroundWindow()==hwnd;
   }
   return false;
  }
@@ -112,6 +136,7 @@ class DesktopBridge {
      bool selected=false;
      try{var f=line.Split('|');string expected=f.Length>4&&!String.IsNullOrEmpty(f[4])?Encoding.UTF8.GetString(Convert.FromBase64String(f[4])):null;
       selected=SelectionReady(uint.Parse(f[0]),new IntPtr(long.Parse(f[1])),int.Parse(f[2]),int.Parse(f[3]),expected);
+      if(!selected){System.Threading.Thread.Sleep(75);selected=SelectionReady(uint.Parse(f[0]),new IntPtr(long.Parse(f[1])),int.Parse(f[2]),int.Parse(f[3]),expected);}
      }catch{}
      Console.WriteLine(selected?"SELECTED":"EMPTY");Console.Out.Flush();
     }

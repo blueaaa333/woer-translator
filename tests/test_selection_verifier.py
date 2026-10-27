@@ -2,6 +2,18 @@ import queue,subprocess,unittest
 from unittest.mock import Mock,patch
 from selection_verifier import check_selection
 class SelectionVerifierTests(unittest.TestCase):
+ def test_pdf_provider_first_response_can_take_more_than_half_a_second(self):
+  import threading
+  from selection_verifier import SelectionVerifier
+  verifier=SelectionVerifier('.',queue.Queue());verifier.server=Mock();verifier.server.poll.return_value=None;verifier.lines=queue.Queue()
+  timer=threading.Timer(.6,lambda:verifier.lines.put(b'SELECTED'));timer.start()
+  try:self.assertTrue(verifier.windows_check(self.source()))
+  finally:timer.join();verifier.close()
+ def test_late_provider_must_still_confirm_real_selection(self):
+  from selection_verifier import SelectionVerifier
+  verifier=SelectionVerifier('.',queue.Queue());verifier.server=Mock();verifier.server.poll.return_value=None;verifier.lines=queue.Queue();verifier.lines.put(b'EMPTY')
+  try:self.assertFalse(verifier.windows_check(self.source()))
+  finally:verifier.close()
  def source(self):return dict(pid=12,hwnd=23,x=100,y=100,id=1,emitted=1000)
  def test_no_selection_is_rejected(self):
   proc=Mock();proc.returncode=0;proc.communicate.return_value=(b'EMPTY\n',b'');proc.poll.return_value=0

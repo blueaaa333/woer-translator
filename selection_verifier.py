@@ -59,7 +59,7 @@ class SelectionVerifier:
             server=self.server
             if server is None or self.stop.is_set():return False
             server.stdin.write(message.encode());server.stdin.flush()
-            answer=self.lines.get(timeout=.5)
+            answer=self.lines.get(timeout=1.5)
             if answer not in (b'SELECTED',b'EMPTY'):raise OSError('Verifier stopped')
             return answer==b'SELECTED'
         except (OSError,queue.Empty,ValueError):
