@@ -1,6 +1,8 @@
 import unittest
 from copy_intent import CopyIntent
 class CopyIntentTests(unittest.TestCase):
+ def test_cancel_discards_pending_copy(self):
+  c=CopyIntent();c.record(1,2,3,1000);c.cancel(1020);self.assertFalse(c.consume(1,2,4,1050))
  def test_background_clipboard_change_is_not_copy(self):self.assertFalse(CopyIntent().consume(1,2,4,1000))
  def test_copy_requires_changed_clipboard(self):
   c=CopyIntent();c.record(1,2,3,1000);self.assertFalse(c.consume(1,2,3,1050));self.assertTrue(c.consume(1,2,4,1050))

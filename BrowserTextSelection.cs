@@ -14,6 +14,8 @@ public interface ISelectedTextReader {
 public static class BrowserTextSelection {
  [StructLayout(LayoutKind.Sequential)]struct Point {public int X,Y;}
  [DllImport("oleacc.dll")]static extern int AccessibleObjectFromPoint(Point point,[MarshalAs(UnmanagedType.Interface)]out IAccessible value,[MarshalAs(UnmanagedType.Struct)]out object child);
+ [DllImport("user32.dll")]static extern IntPtr WindowFromPoint(Point point);
+ [DllImport("oleacc.dll")]static extern int AccessibleObjectFromWindow(IntPtr window,uint objectId,ref Guid iid,[MarshalAs(UnmanagedType.Interface)]out IAccessible value);
  [ComImport,Guid("6D5140C1-7436-11CE-8034-00AA006009FA"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]interface Services {
   [PreserveSig]int QueryService(ref Guid service,ref Guid iid,out IntPtr value);
  }
@@ -49,10 +51,7 @@ public static class BrowserTextSelection {
   }
   return false;
  }
- public static bool AtPoint(int x,int y,string expected,Func<string,string> normalize,Func<string,bool> valid) {
-  IAccessible node;object child;
-  if(AccessibleObjectFromPoint(new Point{X=x,Y=y},out node,out child)!=0||node==null)return false;
-  if(child is int&&(int)child!=0){try{var leaf=node.get_accChild(child) as IAccessible;if(leaf!=null)node=leaf;}catch(COMException){}}
+ static bool InAncestors(IAccessible node,int x,int y,string expected,Func<string,string> normalize,Func<string,bool> valid) {
   for(int depth=0;node!=null&&depth<16;depth++) {
    try {
     int state=Convert.ToInt32(node.get_accState(0)),role=Convert.ToInt32(node.get_accRole(0));
@@ -72,5 +71,19 @@ public static class BrowserTextSelection {
    }catch(COMException){break;}catch(InvalidCastException){break;}
   }
   return false;
+ }
+ public static bool AtPoint(int x,int y,string expected,Func<string,string> normalize,Func<string,bool> valid) {
+  IAccessible node;object child;var point=new Point{X=x,Y=y};
+  // Address the renderer HWND explicitly: a frame-level MSAA hit test can
+  // otherwise stop at the browser chrome before its PDF provider is activated.
+  var iid=typeof(IAccessible).GUID;
+  if(AccessibleObjectFromWindow(WindowFromPoint(point),unchecked((uint)-4),ref iid,out node)==0&&node!=null) {
+   IAccessible hit=null;try{hit=node.accHitTest(x,y) as IAccessible;}catch(COMException){}
+   if(hit!=null&&InAncestors(hit,x,y,expected,normalize,valid))return true;
+   if(InAncestors(node,x,y,expected,normalize,valid))return true;
+  }
+  if(AccessibleObjectFromPoint(point,out node,out child)!=0||node==null)return false;
+  if(child is int&&(int)child!=0){try{var leaf=node.get_accChild(child) as IAccessible;if(leaf!=null)node=leaf;}catch(COMException){}}
+  return InAncestors(node,x,y,expected,normalize,valid);
  }
 }

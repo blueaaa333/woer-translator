@@ -16,7 +16,7 @@ class DesktopBridge {
  static KeyProc keyProc=Keyboard;
  static IntPtr hook=IntPtr.Zero;
  static IntPtr keyHook=IntPtr.Zero;
- static POINT start,last;static DateTime release=DateTime.MinValue;
+ static uint sourceClipboard;static POINT start,last;static DateTime release=DateTime.MinValue;
  static bool lastWasClick;static IntPtr lastSource=IntPtr.Zero;
  static IntPtr source=IntPtr.Zero; static uint sourcePid;static int sequence;static string pending,clearPending;
  static System.Windows.Forms.Timer debounce;static int parent;static string copyPending;
@@ -42,7 +42,8 @@ class DesktopBridge {
   if(n>=0) {
    var m=(MOUSE)Marshal.PtrToStructure(l,typeof(MOUSE));int message=w.ToInt32();
    if(ToolbarLifecyclePolicy.IgnoreMouse(m.flags))return CallNextHookEx(hook,n,w,l);
-   if(message==0x201){start=m.pt;source=GetAncestor(WindowFromPoint(m.pt),2);GetWindowThreadProcessId(source,out sourcePid);
+   if(message==0x201){sourceClipboard=GetClipboardSequenceNumber();start=m.pt;source=GetAncestor(WindowFromPoint(m.pt),2);GetWindowThreadProcessId(source,out sourcePid);
+    if(sourcePid!=parent)Cancel("pointer_down",sourcePid);
    }
    if(message==0x205){uint target;GetWindowThreadProcessId(WindowFromPoint(m.pt),out target);if(target!=parent)Cancel("context_menu",target);}
    if(message==0x202) {
@@ -52,7 +53,7 @@ class DesktopBridge {
     release=now;last=m.pt;lastSource=source;lastWasClick=!dragged&&!doubled;
     if((dragged||doubled) && sourcePid!=parent && source!=IntPtr.Zero){
      long nowMs=(long)(now-new DateTime(1970,1,1)).TotalMilliseconds;
-     pending=sourcePid+"|"+source.ToInt64()+"|"+m.pt.X+"|"+m.pt.Y+"|"+(++sequence)+"|"+nowMs;
+     pending=sourcePid+"|"+source.ToInt64()+"|"+m.pt.X+"|"+m.pt.Y+"|"+(++sequence)+"|"+nowMs+"|"+sourceClipboard;
     }
     else if(!dragged && !doubled && sourcePid!=parent){pending=null;Cancel("click",sourcePid);}
    }
@@ -86,6 +87,7 @@ class DesktopBridge {
   var document=root.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Document));
   return document==null?"":Read(document);
  }
+ static string rangeStatus="no_text_provider";
  static bool CheckSelectedRange(AutomationElement element,int x,int y,string expected) {
   if(element==null)return false;
   try {
@@ -93,8 +95,9 @@ class DesktopBridge {
    object pattern;if(!element.TryGetCurrentPattern(TextPattern.Pattern,out pattern))return false;
    foreach(var range in ((TextPattern)pattern).GetSelection()) {
     bool nonempty=range.CompareEndpoints(System.Windows.Automation.Text.TextPatternRangeEndpoint.Start,range,System.Windows.Automation.Text.TextPatternRangeEndpoint.End)!=0;
-    if(!nonempty)continue;
-    string text=NormalizeQuery(range.GetText(81));if(!ValidQuery(text))continue;
+    if(!nonempty){rangeStatus="collapsed";continue;}
+    string text=NormalizeQuery(range.GetText(81));if(!ValidQuery(text)){rangeStatus="unsupported_text";continue;}
+    rangeStatus="range_outside_pointer";
     if(expected!=null) {if(String.Equals(text,NormalizeQuery(expected),StringComparison.OrdinalIgnoreCase))return true;}
     else foreach(var rect in range.GetBoundingRectangles())if(ToolbarLifecyclePolicy.SelectionNear(new double[]{rect.X,rect.Y,rect.Width,rect.Height},x,y,true))return true;
    }
@@ -113,14 +116,12 @@ class DesktopBridge {
  static string verifyReason="starting";
  static bool SelectionReady(uint pid,IntPtr hwnd,int x,int y,string expected) {
   verifyReason="foreground_changed";
+  rangeStatus="no_text_provider";
   if(GetForegroundWindow()!=hwnd)return false;
   uint actual;GetWindowThreadProcessId(hwnd,out actual);if(actual!=pid)return false;
   bool copying=expected!=null;
   verifyReason="pointer_covered";
   if(!copying&&GetAncestor(WindowFromPoint(new POINT{X=x,Y=y}),2)!=hwnd)return false;
-  // Chromium/PDF can expose IA2 text selection even when its UIA bridge has no range.
-  verifyReason="ia2";
-  try{if(BrowserTextSelection.AtPoint(x,y,expected,NormalizeQuery,ValidQuery))return GetForegroundWindow()==hwnd;}catch(COMException){}
   verifyReason="uia_point";
   var root=AutomationElement.FromHandle(hwnd);
   AutomationElement element=copying?AutomationElement.FocusedElement:AutomationElement.FromPoint(new System.Windows.Point(x,y));
@@ -130,16 +131,22 @@ class DesktopBridge {
    if(!copying&&(role==ControlType.ScrollBar||role==ControlType.Thumb||role==ControlType.Button||role==ControlType.Slider||role==ControlType.TitleBar))return false;
    if(CheckSelectionAncestors(element,hwnd,x,y,expected))return GetForegroundWindow()==hwnd;
   }
+  // Chromium/PDF can expose IA2 text selection even when its UIA bridge has no range.
+  verifyReason="ia2";
+  try{if(BrowserTextSelection.AtPoint(x,y,expected,NormalizeQuery,ValidQuery))return GetForegroundWindow()==hwnd;}catch(COMException){}
   // Chromium's PDF document is sometimes a sibling of the hit-tested surface,
   // so walking only upward from the mouse cannot reach its TextPattern.
   verifyReason="uia_documents";
-  var documents=root.FindAll(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Document));
-  for(int i=0;i<documents.Count&&i<24;i++) {
+  var documents=root.FindAll(TreeScope.Descendants,new OrCondition(new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Document),new PropertyCondition(AutomationElement.IsTextPatternAvailableProperty,true)));
+  int inspected=0;
+  for(int i=0;i<documents.Count&&i<512&&inspected<24;i++) {
    var document=documents[i];
    if(document.Current.IsOffscreen)continue;
+   if(!copying&&!document.Current.BoundingRectangle.Contains(new System.Windows.Point(x,y)))continue;
+   inspected++;
    if(CheckSelectedRange(document,x,y,expected))return GetForegroundWindow()==hwnd;
   }
-  verifyReason="no_accessible_selection";return false;
+  verifyReason="no_accessible_selection/"+documents.Count+"/"+inspected+"/"+rangeStatus;return false;
  }
  static void VerifyServer(int owner) {
   using(var life=new System.Threading.Timer(_=>{try{if(Process.GetProcessById(owner).HasExited)Environment.Exit(0);}catch{Environment.Exit(0);}},null,1000,1000)) {

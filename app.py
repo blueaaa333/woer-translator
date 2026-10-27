@@ -144,13 +144,17 @@ def selection_monitor_once():
     if len(f)==4 and f[2].isdigit() and f[3].isdigit():
      detail=dict(reason=f[1],at=int(f[2]),pid=int(f[3]));events.put(('clear',detail));record_stage('clear_received',**detail)
     continue
-   if len(f)!=6 or not all(re.fullmatch(r'-?\d+',v) for v in f):continue
+   if len(f) not in (6,7) or not all(re.fullmatch(r'-?\d+',v) for v in f):continue
    if not selection_enabled.is_set():continue
    pid=f[0]
    if pid not in cache:cache[pid]=source_process(pid)
    from selection_apps import supported_process
    if not supported_process(cache[pid],compatibility_enabled.is_set()):continue
    event=dict(pid=int(f[0]),hwnd=int(f[1]),x=int(f[2]),y=int(f[3]),id=int(f[4]),emitted=int(f[5]),word='')
+   if len(f)==7:
+    event['clipboard_before']=int(f[6])
+    from gesture_copy import recent_gesture
+    recent_gesture.record(event)
    events.put(('gesture',event));record_stage('gesture_received',id=event['id'],source_pid=event['pid'],app=cache[pid])
  try:
   watch=start_bridge(['watch',str(os.getpid())],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
@@ -390,6 +394,10 @@ class App:
   source=self.pending_gesture or self.pending_source
   if detail and source and detail['at']<=source['emitted']:
    record_stage('clear_ignored_stale',reason=detail['reason'],id=source['id']);return
+  if detail:
+   from gesture_copy import recent_gesture
+   from copy_intent import recent_copy
+   recent_gesture.cancel(detail['at']);recent_copy.cancel(detail['at'])
   self.close_floating(detail['reason'] if detail else 'explicit')
  def round_window(self,win,radius=13):
   if not IS_WINDOWS:return
@@ -527,7 +535,23 @@ class App:
   self.close_floating('checking_selection')
   self.pending_gesture=source
   self.verifier.submit(self.selection_version,source)
+  if IS_WINDOWS and 'clipboard_before' in source:
+   serial=self.selection_version;self.root.after(40,lambda:self.probe_source_copy(source,serial))
+ def probe_source_copy(self,source,serial,attempt=0):
+  if serial!=self.selection_version:return
+  from selection_verifier import source_is_active
+  if not self.selection.get() or not source_is_active(source):return
+  if self.popup and self.popup.winfo_exists():return
+  sequence=u.GetClipboardSequenceNumber()
+  if (sequence&0xffffffff)!=(source['clipboard_before']&0xffffffff):
+   try:value=normalize_query(clipboard())
+   except OSError:value=''
+   if valid_query(value):
+    copied=dict(source,clipboard_word=value,copy_sequence=sequence)
+    if self.try_explicit_copy(copied):return
+  if attempt<3:self.root.after(60,lambda:self.probe_source_copy(source,serial,attempt+1))
  def offer_clipboard(self,text):
+  if self.popup and self.popup.winfo_exists() and self.pending_source:return
   text=normalize_query(text)
   if not valid_query(text):return
   if IS_WINDOWS:
@@ -541,15 +565,26 @@ class App:
    source['copy_sequence']=u.GetClipboardSequenceNumber()
    if self.try_explicit_copy(source):return
    self.root.after(60,lambda:self.try_explicit_copy(source))
+   if self.pending_gesture and 'clipboard_before' in self.pending_gesture:return
+   if not self.auto.get():return
   self.offer_selection(source)
  def try_explicit_copy(self,source):
   from copy_intent import recent_copy
   from selection_verifier import source_is_active
-  if not self.auto.get() or not source_is_active(source):return False
+  if (not self.auto.get() and not self.selection.get()) or not source_is_active(source):return False
   sequence=u.GetClipboardSequenceNumber()
   if sequence!=source.get('copy_sequence'):return False
-  if not recent_copy.consume(source['pid'],source['hwnd'],sequence):return False
-  self.close_floating('explicit_copy');self.prompt('',source);return True
+  explicit=self.auto.get() and recent_copy.consume(source['pid'],source['hwnd'],sequence)
+  if not explicit:
+   if not self.selection.get():return False
+   from gesture_copy import recent_gesture
+   from ctypes import wintypes
+   u.GetClipboardOwner.restype=C.c_void_p;owner=u.GetClipboardOwner();owner_pid=wintypes.DWORD()
+   u.GetWindowThreadProcessId(C.c_void_p(owner),C.byref(owner_pid))
+   gesture=recent_gesture.consume(source['pid'],source['hwnd'],sequence,owner_pid.value)
+   if not gesture:return False
+   source=gesture
+  self.close_floating('explicit_copy' if explicit else 'selection_copied_by_source');self.prompt('',source);return True
  def finish_selection(self,payload):
   serial,source,confirmed=payload
   record_stage('selection_check',id=source['id'],confirmed=bool(confirmed),reason=str(getattr(self.verifier,'last_reason','unknown')))
@@ -794,7 +829,7 @@ class App:
   try:
    seq=clipboard_sequence()
    if seq!=self.seq:
-    if self.auto.get() and time.monotonic()>=self.clipboard_suppress_until:
+    if (self.auto.get() or self.selection.get()) and time.monotonic()>=self.clipboard_suppress_until:
      try:value=clipboard(strict=True)
      except ClipboardBusy:pass
      else:
