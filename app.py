@@ -167,7 +167,7 @@ def selection_monitor():
 
 class App:
  def __init__(self,testing=False):
-  self.lexicon=Lexicon(BASE);self.db=self.lexicon.db;self.result=None;self.online=None;self.use_online=False;self.word='';self.seq=clipboard_sequence();self.popup=None;self.testing=testing
+  self.lexicon=Lexicon(BASE);self.db=self.lexicon.db;self.result=None;self.online=None;self.use_online=False;self.dictionary_gate=threading.BoundedSemaphore(2);self.word='';self.seq=clipboard_sequence();self.popup=None;self.testing=testing
   self.speech=SpeechEngine(BASE,DATA/'speech-cache',user_root=DATA/'speech')
   self.preference_store=PreferenceStore(DATA/'preferences.json',read_only=testing)
   self.preferences=self.read_preferences();self.settings_popup=None
@@ -305,6 +305,9 @@ class App:
   return phon
  def source_link(self):
   import webbrowser
+  if self.result and self.result.get('online_dictionary',{}).get('sources'):
+   from online_dictionary import attribution
+   webbrowser.open(attribution(self.result['online_dictionary'],DATA/'dictionary-cache').resolve().as_uri());return
   webbrowser.open(self.result['community'][0]['url'] if self.result and self.result.get('community') else 'https://kaikki.org/dictionary/English/')
  def select_tab(self,key):
   self.active_tab=key
@@ -384,27 +387,31 @@ class App:
  def menu(self):
   if self.settings_popup and self.settings_popup.winfo_exists():self.settings_popup.destroy();return
   m=self.settings_popup=tk.Toplevel(self.root);m.withdraw();m.overrideredirect(True);m.attributes('-topmost',True);m.configure(bg='#dce5ec')
-  f=tk.Frame(m,bg='white',padx=round(14*self.scale),pady=round(12*self.scale));f.pack(fill='both',expand=True,padx=1,pady=1)
+  f=tk.Frame(m,bg='white',padx=round(14*self.scale),pady=round(7*self.scale));f.pack(fill='both',expand=True,padx=1,pady=1)
   head=tk.Frame(f,bg='white');head.pack(fill='x',pady=(0,7))
   tk.Label(head,image=self.brand_icon,bg='white').pack(side='left',padx=(0,7))
   tk.Label(head,text='沃尔翻译官',bg='white',fg='#23475b',font=(UI_FONT,11,'bold')).pack(side='left')
   self.button(head,'×',m.destroy,small=True).pack(side='right')
-  def section(text):tk.Label(f,text=text,bg='white',fg='#8a9aa6',font=(UI_FONT,9),anchor='w').pack(fill='x',pady=(9,5))
+  def section(text):tk.Label(f,text=text,bg='white',fg='#8a9aa6',font=(UI_FONT,9),anchor='w').pack(fill='x',pady=(4,2))
   def toggle(label,getter,action):
-   row=tk.Frame(f,bg='white');row.pack(fill='x',pady=4)
+   row=tk.Frame(f,bg='white');row.pack(fill='x',pady=1)
    tk.Label(row,text=label,bg='white',fg='#405969',font=(UI_FONT,10)).pack(side='left')
    def click():action();render()
    b=tk.Button(row,command=click,bd=0,highlightthickness=0,relief='flat',cursor='hand2',padx=9,pady=3,font=(UI_FONT,9))
    def render():
     enabled=getter();b.config(text='开启  ●' if enabled else '○  关闭',bg='#e2f1f4' if enabled else '#f0f3f6',fg='#28576b' if enabled else '#81909c',activebackground='#dfebef')
    render();b.pack(side='right');return b
+  section('在线释义')
+  def dictionary_toggle():
+   self.preferences['online_dictionary']=not self.preferences.get('online_dictionary',True);self.save_preferences()
+  toggle('在线词典（维基词典）',lambda:self.preferences.get('online_dictionary',True),dictionary_toggle)
   section('短语翻译')
   def translation_toggle():
    self.preferences['phrase_translation']=not self.preferences.get('phrase_translation',False);self.save_preferences()
   toggle('使用本地翻译服务',lambda:self.preferences.get('phrase_translation',False),translation_toggle)
-  self.button(f,'本地翻译部署指南 ↗',lambda:__import__('webbrowser').open('https://github.com/blueaaa333/woer-translator/blob/main/docs/PHRASES.md'),small=True).pack(anchor='w',pady=3)
+  self.button(f,'本地翻译部署指南 ↗',lambda:__import__('webbrowser').open('https://github.com/blueaaa333/woer-translator/blob/main/docs/PHRASES.md'),small=True).pack(anchor='w',pady=1)
   section('划词与复制')
-  if IS_WINDOWS:self.button(f,'划词状态与排查',self.selection_diagnostics,small=True).pack(anchor='w',pady=3)
+  if IS_WINDOWS:self.button(f,'划词状态与排查',self.selection_diagnostics,small=True).pack(anchor='w',pady=1)
   def select_toggle():
    self.selection.set(not self.selection.get())
    selection_enabled.set() if self.selection.get() else selection_enabled.clear()
@@ -420,8 +427,8 @@ class App:
   def recordings_toggle():
    self.preferences['prefer_recordings']=not self.preferences.get('prefer_recordings',True);self.save_preferences()
   toggle('优先真人发音（联网）',lambda:self.preferences.get('prefer_recordings',True),recordings_toggle)
-  self.button(f,'发音来源与许可 ↗',self.audio_sources,small=True).pack(anchor='w',pady=3)
-  if IS_WINDOWS:self.button(f,'声音检查与输出设备',self.audio_check,small=True).pack(anchor='w',pady=3)
+  self.button(f,'发音来源与许可 ↗',self.audio_sources,small=True).pack(anchor='w',pady=1)
+  if IS_WINDOWS:self.button(f,'声音检查与输出设备',self.audio_check,small=True).pack(anchor='w',pady=1)
   toggle('查词后自动朗读',lambda:self.accent!=0,lambda:self.set_accent(0 if self.accent else self.preferred_accent))
   row=tk.Frame(f,bg='white');row.pack(fill='x',pady=(5,8))
   tk.Label(row,text='默认口音',bg='white',fg='#7c8d9a',font=(UI_FONT,9)).pack(side='left')
@@ -438,15 +445,15 @@ class App:
   for button in (uk,us):
    button.bind('<Enter>',lambda e:paint_accents());button.bind('<Leave>',lambda e:paint_accents())
   paint_accents()
-  if IS_WINDOWS:self.button(f,'下载／升级英美离线语音（约200 MB）',self.install_voices,small=True).pack(anchor='w',pady=5)
+  if IS_WINDOWS:self.button(f,'下载／升级英美离线语音（约200 MB）',self.install_voices,small=True).pack(anchor='w',pady=2)
   else:
-   self.button(f,'Mac 首次运行指南 ↗',self.open_mac_guide,small=True).pack(anchor='w',pady=5)
-   self.button(f,'启用 macOS 划词权限',lambda:mac.request_permissions(events),small=True).pack(anchor='w',pady=5)
+   self.button(f,'Mac 首次运行指南 ↗',self.open_mac_guide,small=True).pack(anchor='w',pady=2)
+   self.button(f,'启用 macOS 划词权限',lambda:mac.request_permissions(events),small=True).pack(anchor='w',pady=2)
   section('软件更新')
   def update_toggle():
    self.preferences['check_updates']=not self.preferences.get('check_updates',True);self.save_preferences()
   toggle('自动检查更新',lambda:self.preferences.get('check_updates',True),update_toggle)
-  self.button(f,'检查更新 · v'+self.current_version,lambda:self.updates.check(True),small=True).pack(anchor='w',pady=5)
+  self.button(f,'检查更新 · v'+self.current_version,lambda:self.updates.check(True),small=True).pack(anchor='w',pady=2)
   tk.Frame(f,bg='#edf1f4',height=1).pack(fill='x',pady=(3,7))
   footer=tk.Frame(f,bg='white');footer.pack(fill='x')
   self.button(footer,'关闭菜单',m.destroy,small=True).pack(side='left')
@@ -629,6 +636,7 @@ class App:
   if self.player and not self.testing and not self.preferences.get('legacy_audio',False):self.player.warm(self.preferences.get('audio_device',''))
   chosen=self.accent if accent is None else accent
   if chosen:self.speak(chosen)
+  if self.preferences.get('online_dictionary',True) and not self.testing:self.lookup_online(s,self.selection_version)
   if ' ' in s and not self.result.get('compounds') and self.preferences.get('phrase_translation',False) and not self.testing:
    serial=self.selection_version;self.status.config(text='正在翻译完整短语…')
    def translate_job():
@@ -642,6 +650,25 @@ class App:
   with managed_lock:running=any(p.poll() is None for p in managed)
   status='正在运行' if running else '未运行或已退出'
   messagebox.showinfo('划词状态与排查','版本：'+self.current_version+'\n复制显示浮条：'+('开启' if self.auto.get() else '关闭')+'\n选中显示浮条：'+('开启' if self.selection.get() else '关闭')+'\n划词监听：'+status+'\n组件：'+('存在' if (BASE/'DesktopBridge.exe').is_file() else '缺失，请重新安装')+'\n\n先在普通权限的浏览器选中英文测试。若不能弹出，请按 Ctrl+C 测试复制弹窗。浏览器以管理员权限运行时，普通权限软件可能无法读取。\n\n若监听未运行，请重新打开软件，并检查 Windows 安全中心是否隔离 DesktopBridge.exe。不要关闭系统防护。',parent=self.root)
+ def lookup_online(self,word,serial):
+  self.status.config(text='本地释义已显示 · 正在查询维基词典…')
+  def worker():
+   if not self.dictionary_gate.acquire(blocking=False):
+    events.put(('dictionary_result',(serial,word,None,'在线词典正忙，请稍后重新查询')));return
+   try:
+    from online_dictionary import OnlineDictionary,DictionaryUnavailable
+    try:data=OnlineDictionary(DATA/'dictionary-cache').get(word);error=''
+    except DictionaryUnavailable as exc:data=None;error=str(exc)
+    except Exception:data=None;error='在线词典查询失败，本地释义仍可使用'
+    events.put(('dictionary_result',(serial,word,data,error)))
+   finally:self.dictionary_gate.release()
+  threading.Thread(target=worker,daemon=True).start()
+ def finish_dictionary(self,payload):
+  serial,word,data,error=payload
+  if serial!=self.selection_version or word!=self.word or not self.preferences.get('online_dictionary',True):return
+  if data and data.get('entries'):
+   self.result['online_dictionary']=data;self.render();self.status.config(text='在线维基词典 · 点击“来源”查看许可')
+  else:self.status.config(text=error or '在线维基词典也暂未收录此词，可尝试完整短语')
  def audio_check(self):
   from audio_settings import show
   show(self,DATA)
@@ -733,6 +760,7 @@ class App:
       if not value[3]:
        self.result['machine_translation']=value[2];self.render()
       self.status.config(text=value[2] if value[3] else '短语机器翻译 · 请结合上下文核对')
+    elif kind=='dictionary_result':self.finish_dictionary(value)
     elif kind=='lookup':self.lookup(value)
     elif kind=='hotkey_source':
      self.selection_version+=1;self.query_source(value,anchor=(value['x']-10,value['y']-24))

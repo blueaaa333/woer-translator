@@ -274,5 +274,23 @@
     "definition": "",
     "note": "表示依据某种情况重新判断或采取行动。",
     "examples": []
+  },
+  "ceteris paribus": {
+    "translation": "adv. 其他条件不变；在其他条件相同的情况下",
+    "definition": "With other relevant conditions held constant.",
+    "note": "经济学中用于隔离一个因素的影响：假定其他相关条件保持不变，再考察所讨论因素的变化。源自拉丁语，通常按完整短语理解。",
+    "examples": [
+      [
+        "经济学：其他条件不变",
+        "Ceteris paribus, a higher price reduces the quantity demanded.",
+        "其他条件不变时，价格上升会使需求量减少。"
+      ]
+    ]
+  },
+  "ceteris": {
+    "translation": "拉丁语词形，单独使用时需结合上下文。",
+    "definition": "An inflected form of the Latin adjective ceterus.",
+    "note": "经济学教材中通常见于 ceteris paribus，整句短语意为“其他条件不变”。建议同时选中 paribus 后查询完整表达。",
+    "examples": []
   }
 }

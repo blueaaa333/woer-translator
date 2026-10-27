@@ -112,6 +112,11 @@ def definition_sections(result):
  if not primary:
   for sense in result['senses']:
    if sense['chinese']:add('meaning',POS.get(sense['pos'],sense['pos'])+' '+sense['chinese'])
+ for item in result.get('online_dictionary',{}).get('entries',[]):
+  text=(item.get('language','')+' · '+item.get('pos','')).strip(' ·')+'\n'+item['text']
+  if item.get('english'):details.append(dict(kind='english',text=text))
+  else:add('meaning',text)
+ if result.get('online_dictionary',{}).get('entries'):sources.append('在线维基词典 · CC BY-SA 4.0（提取／简体转换）')
  if note:primary.append(dict(kind='note',text=note))
  if result.get('exam'):
   tags={'zk':'中考','gk':'高考','cet4':'四级','cet6':'六级','ky':'考研','ielts':'雅思','toefl':'托福','gre':'GRE'}

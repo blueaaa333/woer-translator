@@ -55,3 +55,8 @@ Recordings are fetched from Wikimedia Commons only after checking the exact word
 ## Selected offline voices (v0.3.6)
 
 The optional Windows upgrade downloads en_GB-cori-high and en_US-kristin-medium from the fixed Piper voice revision in scripts/speech-downloads.json. The upstream model cards identify LibriVox / public-domain training data and from-scratch training. The original cards are retained in licenses/dictionary-voice-uk-MODEL_CARD.txt and licenses/dictionary-voice-us-MODEL_CARD.txt; the voice repository declares MIT. Original training-time phonemizer configurations are preserved. We do not redistribute model weights or the optional Piper runtime in the repository/installers, and do not use Bing dictionary audio. This is a synthesis option, not a claim of commercial-dictionary equivalence or an assurance covering all possible upstream rights.
+
+
+## 在线维基词典
+
+通过 Wikimedia 官方 API 按需获取，词典文本及本软件的释义提取／繁简转换结果沿用 CC BY-SA 4.0。保留原词条、编辑历史与许可链接。与代码 MIT 许可分开标记。详见 [在线词典](docs/ONLINE_DICTIONARY.md)。不在源代码仓库分发用户在线缓存。
