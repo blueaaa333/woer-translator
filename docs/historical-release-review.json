@@ -1,0 +1,688 @@
+{
+  "date": "2026-10-27",
+  "scope": "Public tag trees and dictionary blob identity; not every historical installer unpacked",
+  "history": {
+    "scope": "Reachable commit history under all cloned public refs; filenames, not a full content-level rights review",
+    "commits": 45,
+    "unique_paths": 147,
+    "flagged_paths": [],
+    "head": "b9900be4d4d803f462115ee9cb251bfcc2dda474"
+  },
+  "releases": [
+    {
+      "tag": "v0.3.11",
+      "tree": "cbbecbb2a4a4a52531195b73b31824facef3c53f",
+      "truncated": false,
+      "files": 147,
+      "forbidden": [],
+      "data": [
+        {
+          "path": "data/community.db.gz",
+          "sha": "7000ab0fb16b22a69035d8c81384668caf11faa0"
+        },
+        {
+          "path": "data/extended.db.gz",
+          "sha": "a5d99cbe6c29ab43d29ae8fc692caf0223d6ca1e"
+        },
+        {
+          "path": "data/words.db.gz",
+          "sha": "5edb18cbba133743506fa023cada999697ab5976"
+        }
+      ],
+      "native_gate": true,
+      "assets": [
+        {
+          "name": "SHA256SUMS.txt",
+          "digest": "sha256:a43c0fc03e6c1157a09eaebcfe303c50d5629492b8123b1d2129d369ba78276a",
+          "size": 316
+        },
+        {
+          "name": "WoerTranslator-0.3.11-macOS-arm64.dmg",
+          "digest": "sha256:2ce6de4728c4b516a82a3b27a8a86780387094ebd49ad99fff2955e74fda9a39",
+          "size": 50797900
+        },
+        {
+          "name": "WoerTranslator-0.3.11-macOS-x64.dmg",
+          "digest": "sha256:86e1695851d10b058da5117c02257e21ccaf024a650adba0ad3891cf2d0d6243",
+          "size": 52217914
+        },
+        {
+          "name": "WoerTranslator-0.3.11-Windows-x64-Setup.exe",
+          "digest": "sha256:d8a8c6bff5f0cc7f6e0aa0ea742fd1f0afb479ffb90569e76edcba19f4bd9199",
+          "size": 32040131
+        }
+      ],
+      "downloads": 0
+    },
+    {
+      "tag": "v0.3.10",
+      "tree": "b901c3b2f638c74b16ef69edbddca340cc60fb30",
+      "truncated": false,
+      "files": 132,
+      "forbidden": [],
+      "data": [
+        {
+          "path": "data/community.db.gz",
+          "sha": "7000ab0fb16b22a69035d8c81384668caf11faa0"
+        },
+        {
+          "path": "data/extended.db.gz",
+          "sha": "a5d99cbe6c29ab43d29ae8fc692caf0223d6ca1e"
+        },
+        {
+          "path": "data/words.db.gz",
+          "sha": "5edb18cbba133743506fa023cada999697ab5976"
+        }
+      ],
+      "native_gate": false,
+      "assets": [
+        {
+          "name": "SHA256SUMS.txt",
+          "digest": "sha256:585a747a61d2ebf137373da345aee41ab079a567ca55c7d86fe5b02b7d52a233",
+          "size": 316
+        },
+        {
+          "name": "WoerTranslator-0.3.10-macOS-arm64.dmg",
+          "digest": "sha256:05b797773e796a849426d3497ab98c86e30e038ed84902c7e8edb0ea6c4eb7c0",
+          "size": 50715235
+        },
+        {
+          "name": "WoerTranslator-0.3.10-macOS-x64.dmg",
+          "digest": "sha256:ed5527403d068928b09562ea56fb9e9a909e1e35435e40a0e14035ede5f7e937",
+          "size": 51512120
+        },
+        {
+          "name": "WoerTranslator-0.3.10-Windows-x64-Setup.exe",
+          "digest": "sha256:f4f68c416641a8dfa63a8e5fea5c0c8375d61b97cb4c68a791613ba2390e0857",
+          "size": 32019911
+        }
+      ],
+      "downloads": 71
+    },
+    {
+      "tag": "v0.3.9",
+      "tree": "449e7e73c160da78910157cfc042584d8a203f6a",
+      "truncated": false,
+      "files": 129,
+      "forbidden": [],
+      "data": [
+        {
+          "path": "data/community.db.gz",
+          "sha": "7000ab0fb16b22a69035d8c81384668caf11faa0"
+        },
+        {
+          "path": "data/extended.db.gz",
+          "sha": "a5d99cbe6c29ab43d29ae8fc692caf0223d6ca1e"
+        },
+        {
+          "path": "data/words.db.gz",
+          "sha": "5edb18cbba133743506fa023cada999697ab5976"
+        }
+      ],
+      "native_gate": false,
+      "assets": [
+        {
+          "name": "SHA256SUMS.txt",
+          "digest": "sha256:514298719b4c8448a3b77c2f4757608ffacf69d6d39e06b70c59c65cb6a62ca0",
+          "size": 313
+        },
+        {
+          "name": "WoerTranslator-0.3.9-macOS-arm64.dmg",
+          "digest": "sha256:0d1c935e8ee5e85ba7b4f235c9dacc80698d1b2364a290df508fb63eceec6bda",
+          "size": 50518126
+        },
+        {
+          "name": "WoerTranslator-0.3.9-macOS-x64.dmg",
+          "digest": "sha256:6d5d5cfefb96b1fb14fb97b5a417be2b08ae3635e87e0150cfdf9b348fff71de",
+          "size": 51415173
+        },
+        {
+          "name": "WoerTranslator-0.3.9-Windows-x64-Setup.exe",
+          "digest": "sha256:77e9a3b09138d7753d35187cda95102bc096adf35df40a1bda9b5484594d53be",
+          "size": 31996100
+        }
+      ],
+      "downloads": 0
+    },
+    {
+      "tag": "v0.3.8",
+      "tree": "a1d82d12941d0fbcbb7c586c2a9366a6f4e0467f",
+      "truncated": false,
+      "files": 127,
+      "forbidden": [],
+      "data": [
+        {
+          "path": "data/community.db.gz",
+          "sha": "7000ab0fb16b22a69035d8c81384668caf11faa0"
+        },
+        {
+          "path": "data/extended.db.gz",
+          "sha": "a5d99cbe6c29ab43d29ae8fc692caf0223d6ca1e"
+        },
+        {
+          "path": "data/words.db.gz",
+          "sha": "5edb18cbba133743506fa023cada999697ab5976"
+        }
+      ],
+      "native_gate": false,
+      "assets": [
+        {
+          "name": "SHA256SUMS.txt",
+          "digest": "sha256:741364775e4712ae02b2c3799820048278f900ff549b010b1bc81d020a69ca85",
+          "size": 313
+        },
+        {
+          "name": "WoerTranslator-0.3.8-macOS-arm64.dmg",
+          "digest": "sha256:426aadd29cd1cb52eaba027213e1430623f8321085031ed15741dc85cc11304c",
+          "size": 50481202
+        },
+        {
+          "name": "WoerTranslator-0.3.8-macOS-x64.dmg",
+          "digest": "sha256:89a5eb0dde80e188f12273098c50b7ce7479ac0b9324b508e2612bdb1962ae89",
+          "size": 51431858
+        },
+        {
+          "name": "WoerTranslator-0.3.8-Windows-x64-Setup.exe",
+          "digest": "sha256:37b9a2bdac3d3f7fb135e9bb5520c5c31035cd9ad2b01d1f8078be9c980884fb",
+          "size": 32000095
+        }
+      ],
+      "downloads": 0
+    },
+    {
+      "tag": "v0.3.7",
+      "tree": "feb8f88de02ecd6480f7c84617230a0ed72eae33",
+      "truncated": false,
+      "files": 127,
+      "forbidden": [],
+      "data": [
+        {
+          "path": "data/community.db.gz",
+          "sha": "7000ab0fb16b22a69035d8c81384668caf11faa0"
+        },
+        {
+          "path": "data/extended.db.gz",
+          "sha": "a5d99cbe6c29ab43d29ae8fc692caf0223d6ca1e"
+        },
+        {
+          "path": "data/words.db.gz",
+          "sha": "5edb18cbba133743506fa023cada999697ab5976"
+        }
+      ],
+      "native_gate": false,
+      "assets": [
+        {
+          "name": "SHA256SUMS.txt",
+          "digest": "sha256:5238e0959834e37b71a4b58e8ecde1cdb3e1ff566224b9ba5e8506811699242a",
+          "size": 313
+        },
+        {
+          "name": "WoerTranslator-0.3.7-macOS-arm64.dmg",
+          "digest": "sha256:a2a9899ded47557c30fc5b2e86a133e634086d020e28be59457259a98e3c31c6",
+          "size": 50479721
+        },
+        {
+          "name": "WoerTranslator-0.3.7-macOS-x64.dmg",
+          "digest": "sha256:301400823d5265b0570a5290782abb322d72f2cfa01587506f6881336a2371c1",
+          "size": 51457112
+        },
+        {
+          "name": "WoerTranslator-0.3.7-Windows-x64-Setup.exe",
+          "digest": "sha256:ddf5a7c62cb96e60a9a42ad3eb62cf32375a4725334ac6c5ee5b2bf4a8608126",
+          "size": 31993437
+        }
+      ],
+      "downloads": 0
+    },
+    {
+      "tag": "v0.3.6",
+      "tree": "f8434eaf506eb30da3213430733ad705607f4ecb",
+      "truncated": false,
+      "files": 124,
+      "forbidden": [],
+      "data": [
+        {
+          "path": "data/community.db.gz",
+          "sha": "7000ab0fb16b22a69035d8c81384668caf11faa0"
+        },
+        {
+          "path": "data/extended.db.gz",
+          "sha": "a5d99cbe6c29ab43d29ae8fc692caf0223d6ca1e"
+        },
+        {
+          "path": "data/words.db.gz",
+          "sha": "5edb18cbba133743506fa023cada999697ab5976"
+        }
+      ],
+      "native_gate": false,
+      "assets": [
+        {
+          "name": "SHA256SUMS.txt",
+          "digest": "sha256:eb9462394433aa27c27f48c08abe767fb2086d9d16b4242c6c22639d66b44419",
+          "size": 313
+        },
+        {
+          "name": "WoerTranslator-0.3.6-macOS-arm64.dmg",
+          "digest": "sha256:03a92f321738254ca50ab19b8b45ccbed097b9bec6039c0f6b1e84073a7a3f4a",
+          "size": 50288251
+        },
+        {
+          "name": "WoerTranslator-0.3.6-macOS-x64.dmg",
+          "digest": "sha256:515446bb877d4ccc0056b39fc2892350f63220d4dcab4d5bf79c00f68fc0f62c",
+          "size": 52090088
+        },
+        {
+          "name": "WoerTranslator-0.3.6-Windows-x64-Setup.exe",
+          "digest": "sha256:97d778f2697efb19d07c0301bc67e684357567f6031e45ffe010c3947f2a747b",
+          "size": 31988951
+        }
+      ],
+      "downloads": 5
+    },
+    {
+      "tag": "v0.3.5",
+      "tree": "1b8c4b4114e4b1260e803121dd03795e035538b0",
+      "truncated": false,
+      "files": 119,
+      "forbidden": [],
+      "data": [
+        {
+          "path": "data/community.db.gz",
+          "sha": "7000ab0fb16b22a69035d8c81384668caf11faa0"
+        },
+        {
+          "path": "data/extended.db.gz",
+          "sha": "a5d99cbe6c29ab43d29ae8fc692caf0223d6ca1e"
+        },
+        {
+          "path": "data/words.db.gz",
+          "sha": "5edb18cbba133743506fa023cada999697ab5976"
+        }
+      ],
+      "native_gate": false,
+      "assets": [
+        {
+          "name": "SHA256SUMS.txt",
+          "digest": "sha256:fe5fd91bd978aac318b07dac1e4a24dd3ee33ca47ef3d1c1dc31ee81d36d37e1",
+          "size": 313
+        },
+        {
+          "name": "WoerTranslator-0.3.5-macOS-arm64.dmg",
+          "digest": "sha256:3b82491d401b91934274be8cbba3ff10cd8cfe7239a03a7472b0e611690ff5d6",
+          "size": 50547296
+        },
+        {
+          "name": "WoerTranslator-0.3.5-macOS-x64.dmg",
+          "digest": "sha256:f389367b694970292d1fec914f9af288b5478a5ba9b80bc1ea7091eb44685e19",
+          "size": 51469131
+        },
+        {
+          "name": "WoerTranslator-0.3.5-Windows-x64-Setup.exe",
+          "digest": "sha256:d99e582d844e6e09bc9db0f58eb2fa4eb9e1b5b834273a1cde11e50192f7194c",
+          "size": 31982913
+        }
+      ],
+      "downloads": 0
+    },
+    {
+      "tag": "v0.3.4",
+      "tree": "f763904f20df533f73e85728672b3e5d164fd8c5",
+      "truncated": false,
+      "files": 119,
+      "forbidden": [],
+      "data": [
+        {
+          "path": "data/community.db.gz",
+          "sha": "7000ab0fb16b22a69035d8c81384668caf11faa0"
+        },
+        {
+          "path": "data/extended.db.gz",
+          "sha": "a5d99cbe6c29ab43d29ae8fc692caf0223d6ca1e"
+        },
+        {
+          "path": "data/words.db.gz",
+          "sha": "5edb18cbba133743506fa023cada999697ab5976"
+        }
+      ],
+      "native_gate": false,
+      "assets": [
+        {
+          "name": "SHA256SUMS.txt",
+          "digest": "sha256:d75d2a5f3def8aec5aa4a0990712a70a05e6ba4fe9af17c945227ff0924690e3",
+          "size": 313
+        },
+        {
+          "name": "WoerTranslator-0.3.4-macOS-arm64.dmg",
+          "digest": "sha256:59c59ddaadd014af401896dbee19e5bbdad0e0a3779ecb7581141fd14173ca25",
+          "size": 50614650
+        },
+        {
+          "name": "WoerTranslator-0.3.4-macOS-x64.dmg",
+          "digest": "sha256:5979461998ffc474b100bd47adfde19050970e0d748bd79b046b18d62181f736",
+          "size": 51465918
+        },
+        {
+          "name": "WoerTranslator-0.3.4-Windows-x64-Setup.exe",
+          "digest": "sha256:9526dbc9085a5aed8e7c14ff6d4b31e68228db8d34fb0c65bb2d74c7a3949d86",
+          "size": 31979515
+        }
+      ],
+      "downloads": 0
+    },
+    {
+      "tag": "v0.3.3",
+      "tree": "868ba4ec7514d0c24bd494253e8a3d83adf97bde",
+      "truncated": false,
+      "files": 116,
+      "forbidden": [],
+      "data": [
+        {
+          "path": "data/community.db.gz",
+          "sha": "7000ab0fb16b22a69035d8c81384668caf11faa0"
+        },
+        {
+          "path": "data/extended.db.gz",
+          "sha": "a5d99cbe6c29ab43d29ae8fc692caf0223d6ca1e"
+        },
+        {
+          "path": "data/words.db.gz",
+          "sha": "5edb18cbba133743506fa023cada999697ab5976"
+        }
+      ],
+      "native_gate": false,
+      "assets": [
+        {
+          "name": "SHA256SUMS.txt",
+          "digest": "sha256:aded03e5ff6495a9498795b0a9eedbde28bdd6af9061ec3fa7f25f4976c2e36f",
+          "size": 313
+        },
+        {
+          "name": "WoerTranslator-0.3.3-macOS-arm64.dmg",
+          "digest": "sha256:60a614bbf3a4f90d760b8444833f6d765b466ca7a7ce69c9d28615f2728ca430",
+          "size": 50482486
+        },
+        {
+          "name": "WoerTranslator-0.3.3-macOS-x64.dmg",
+          "digest": "sha256:305c2404205d1e8722e48f8e5b81751011438ad4d86279caa6085570781a0d7d",
+          "size": 51424880
+        },
+        {
+          "name": "WoerTranslator-0.3.3-Windows-x64-Setup.exe",
+          "digest": "sha256:e2bdd464bf5b0bff76b442130187e25913e57228439229dfc12a670ca10da6bd",
+          "size": 31967108
+        }
+      ],
+      "downloads": 2
+    },
+    {
+      "tag": "v0.3.2",
+      "tree": "1660c19e3b1cfae480e71cbba94a5801b4c7f9a5",
+      "truncated": false,
+      "files": 113,
+      "forbidden": [],
+      "data": [
+        {
+          "path": "data/community.db.gz",
+          "sha": "7000ab0fb16b22a69035d8c81384668caf11faa0"
+        },
+        {
+          "path": "data/extended.db.gz",
+          "sha": "a5d99cbe6c29ab43d29ae8fc692caf0223d6ca1e"
+        },
+        {
+          "path": "data/words.db.gz",
+          "sha": "5edb18cbba133743506fa023cada999697ab5976"
+        }
+      ],
+      "native_gate": false,
+      "assets": [
+        {
+          "name": "SHA256SUMS.txt",
+          "digest": "sha256:0bd09242e4935e28d593472ef7c646fae6b6d2d01214ba648722a079655465fd",
+          "size": 313
+        },
+        {
+          "name": "WoerTranslator-0.3.2-macOS-arm64.dmg",
+          "digest": "sha256:60a893a00d67496f5c00e02e7ba339d88da9ecf7183b3e191796da978beeeb38",
+          "size": 49256339
+        },
+        {
+          "name": "WoerTranslator-0.3.2-macOS-x64.dmg",
+          "digest": "sha256:420cbd3c9743d0a5863fa3c0395ae735f62fc7db9dc419939d75c02e4dd23754",
+          "size": 49872180
+        },
+        {
+          "name": "WoerTranslator-0.3.2-Windows-x64-Setup.exe",
+          "digest": "sha256:54e1c91061d1045d862dd0dd560b7ba6adb6f6ba095e6dffb2f1fd5808d0ed8c",
+          "size": 31621555
+        }
+      ],
+      "downloads": 0
+    },
+    {
+      "tag": "v0.3.1",
+      "tree": "8cbd9a673b18ca3e80e08ec692765898a565ad96",
+      "truncated": false,
+      "files": 110,
+      "forbidden": [],
+      "data": [
+        {
+          "path": "data/community.db.gz",
+          "sha": "7000ab0fb16b22a69035d8c81384668caf11faa0"
+        },
+        {
+          "path": "data/extended.db.gz",
+          "sha": "a5d99cbe6c29ab43d29ae8fc692caf0223d6ca1e"
+        },
+        {
+          "path": "data/words.db.gz",
+          "sha": "5edb18cbba133743506fa023cada999697ab5976"
+        }
+      ],
+      "native_gate": false,
+      "assets": [
+        {
+          "name": "SHA256SUMS.txt",
+          "digest": "sha256:1da6fe50c7ee5955577df0cdbf6e366ecd187af49ba724573b3ad5d7454ced43",
+          "size": 313
+        },
+        {
+          "name": "WoerTranslator-0.3.1-macOS-arm64.dmg",
+          "digest": "sha256:ef24024eb6cf9832fbec889f9e4e0288174a36799fe1ad7488dc475258c84625",
+          "size": 49213575
+        },
+        {
+          "name": "WoerTranslator-0.3.1-macOS-x64.dmg",
+          "digest": "sha256:cc76ddc0c47de9d57467d9da4a4b359d8786f6361d8023dfbd435776043cea2d",
+          "size": 51571009
+        },
+        {
+          "name": "WoerTranslator-0.3.1-Windows-x64-Setup.exe",
+          "digest": "sha256:68d7488b797a64223b8ff73d2bbbc575a76adf3dcc491bcda3a2e0502e7aab4c",
+          "size": 31610152
+        }
+      ],
+      "downloads": 0
+    },
+    {
+      "tag": "v0.3.0",
+      "tree": "96fdc121e56685df3f8195e011ef16ba511123a3",
+      "truncated": false,
+      "files": 108,
+      "forbidden": [],
+      "data": [
+        {
+          "path": "data/community.db.gz",
+          "sha": "7000ab0fb16b22a69035d8c81384668caf11faa0"
+        },
+        {
+          "path": "data/extended.db.gz",
+          "sha": "a5d99cbe6c29ab43d29ae8fc692caf0223d6ca1e"
+        },
+        {
+          "path": "data/words.db.gz",
+          "sha": "5edb18cbba133743506fa023cada999697ab5976"
+        }
+      ],
+      "native_gate": false,
+      "assets": [
+        {
+          "name": "SHA256SUMS.txt",
+          "digest": "sha256:967b3142f05b8d4aeb3e6dfd62886d8d631610237e9e7107eb8f550860c504af",
+          "size": 313
+        },
+        {
+          "name": "WoerTranslator-0.3.0-macOS-arm64.dmg",
+          "digest": "sha256:ee47d335e4f331fc9ab9f3be357adc5f9bba17e8854ccfdd159af0178b420471",
+          "size": 49214382
+        },
+        {
+          "name": "WoerTranslator-0.3.0-macOS-x64.dmg",
+          "digest": "sha256:44113ce168cba419a562d1c71ff5935a78ca660c34b51f5024df40050c67aa7a",
+          "size": 51583914
+        },
+        {
+          "name": "WoerTranslator-0.3.0-Windows-x64-Setup.exe",
+          "digest": "sha256:75e2a9f0d340edb2a1726ccfce489af20b4c282c4f92339c2f188335769658dd",
+          "size": 31608077
+        }
+      ],
+      "downloads": 0
+    },
+    {
+      "tag": "v0.2.2",
+      "tree": "b91dce8dd9c1c2a6eba3a8e2163e4e2b214589fc",
+      "truncated": false,
+      "files": 102,
+      "forbidden": [],
+      "data": [
+        {
+          "path": "data/community.db.gz",
+          "sha": "7000ab0fb16b22a69035d8c81384668caf11faa0"
+        },
+        {
+          "path": "data/extended.db.gz",
+          "sha": "a5d99cbe6c29ab43d29ae8fc692caf0223d6ca1e"
+        },
+        {
+          "path": "data/words.db.gz",
+          "sha": "5edb18cbba133743506fa023cada999697ab5976"
+        }
+      ],
+      "native_gate": false,
+      "assets": [
+        {
+          "name": "SHA256SUMS.txt",
+          "digest": "sha256:2b03b4b89b47aed33bdb25c39201be1c159e1ab7c343963d63355b6e96678b0d",
+          "size": 313
+        },
+        {
+          "name": "WoerTranslator-0.2.2-macOS-arm64.dmg",
+          "digest": "sha256:b01f3aa6fd8ce2ea211b1df05a1f0413f5ef5addb77762629b69528feb520390",
+          "size": 115372389
+        },
+        {
+          "name": "WoerTranslator-0.2.2-macOS-x64.dmg",
+          "digest": "sha256:c34e04456fc5dac9310eeb737560b167bab3ea52b0ed86fa18744b3f0ccd5203",
+          "size": 118523791
+        },
+        {
+          "name": "WoerTranslator-0.2.2-Windows-x64-Setup.exe",
+          "digest": "sha256:ab18b2b0c443b0f26ce6a2ad05f576f289255e5d15cff9c9189942fc6c78ca7d",
+          "size": 31349609
+        }
+      ],
+      "downloads": 5
+    },
+    {
+      "tag": "v0.2.1",
+      "tree": "6b70151f42d8f7024b823b0b5042b009e4e9fec3",
+      "truncated": false,
+      "files": 94,
+      "forbidden": [],
+      "data": [
+        {
+          "path": "data/community.db.gz",
+          "sha": "7000ab0fb16b22a69035d8c81384668caf11faa0"
+        },
+        {
+          "path": "data/extended.db.gz",
+          "sha": "a5d99cbe6c29ab43d29ae8fc692caf0223d6ca1e"
+        },
+        {
+          "path": "data/words.db.gz",
+          "sha": "5edb18cbba133743506fa023cada999697ab5976"
+        }
+      ],
+      "native_gate": false,
+      "assets": [
+        {
+          "name": "SHA256SUMS.txt",
+          "digest": "sha256:aecc5a884516496274e06882143362b4a2ea309d844fb1324415aecd6132ec29",
+          "size": 313
+        },
+        {
+          "name": "WoerTranslator-0.2.1-macOS-arm64.dmg",
+          "digest": "sha256:6c3023707de0e635d8df70706c9450f5509a4bb477613197c029957289da96c6",
+          "size": 115360183
+        },
+        {
+          "name": "WoerTranslator-0.2.1-macOS-x64.dmg",
+          "digest": "sha256:2e3a4427201f647f2fbddd27f8c0ba6547842f2cb71fff49439b67e369ea9d70",
+          "size": 118505286
+        },
+        {
+          "name": "WoerTranslator-0.2.1-Windows-x64-Setup.exe",
+          "digest": "sha256:e2f1893e48217e23a5963f17adeb1617d28dac308f7ed8a61dd3954866f03173",
+          "size": 31332389
+        }
+      ],
+      "downloads": 1
+    },
+    {
+      "tag": "v0.2.0",
+      "tree": "f5420aa601b859d05ca390fdf8c161db579d2ccb",
+      "truncated": false,
+      "files": 87,
+      "forbidden": [],
+      "data": [
+        {
+          "path": "data/community.db.gz",
+          "sha": "7000ab0fb16b22a69035d8c81384668caf11faa0"
+        },
+        {
+          "path": "data/extended.db.gz",
+          "sha": "a5d99cbe6c29ab43d29ae8fc692caf0223d6ca1e"
+        },
+        {
+          "path": "data/words.db.gz",
+          "sha": "5edb18cbba133743506fa023cada999697ab5976"
+        }
+      ],
+      "native_gate": false,
+      "assets": [
+        {
+          "name": "SHA256SUMS.txt",
+          "digest": "sha256:296c0a94911d019e2e99cf043e112fbb3f47802e01b2e37a46aafda20f0f89ff",
+          "size": 313
+        },
+        {
+          "name": "WoerTranslator-0.2.0-macOS-arm64.dmg",
+          "digest": "sha256:c4e0c93b322bedef39625f7a361b71722f7915566edf10cdc704f6c5cbaca7c1",
+          "size": 114304687
+        },
+        {
+          "name": "WoerTranslator-0.2.0-macOS-x64.dmg",
+          "digest": "sha256:2454d39aed91514ae49573d2d5449fface30f831fc8a8a6d143cdc01fbd4a78f",
+          "size": 116541731
+        },
+        {
+          "name": "WoerTranslator-0.2.0-Windows-x64-Setup.exe",
+          "digest": "sha256:a2d66076ac634e9553aee3eafa49eee78b2b97a12307943895eb6123f9c27874",
+          "size": 31322502
+        }
+      ],
+      "downloads": 3
+    }
+  ]
+}
