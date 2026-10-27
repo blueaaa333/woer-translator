@@ -15,4 +15,13 @@ public static class ToolbarLifecyclePolicy {
   if(key==9 || key==13 || key==32 || (key>=48&&key<=90) || (key>=96&&key<=111) || (key>=186&&key<=222))return "typing";
   return null;
  }
+ public static bool SelectionNear(double[] rectangles,int x,int y,bool nonempty) {
+  if(!nonempty||rectangles==null)return false;
+  for(int i=0;i+3<rectangles.Length;i+=4) {
+   double left=rectangles[i],top=rectangles[i+1],width=rectangles[i+2],height=rectangles[i+3];
+   if(Double.IsNaN(left)||Double.IsNaN(top)||Double.IsInfinity(left)||Double.IsInfinity(top)||Double.IsNaN(width)||Double.IsNaN(height)||Double.IsInfinity(width)||Double.IsInfinity(height)||width<=0||height<=0)continue;
+   if(x>=left-12&&x<=left+width+12&&y>=top-12&&y<=top+height+12)return true;
+  }
+  return false;
+ }
 }

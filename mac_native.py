@@ -105,7 +105,7 @@ def run():
             initial = sequence is None
             sequence = count
             value = board.stringForType_(NSPasteboardTypeString)
-            emit('clipboard', sequence=count, text=str(value) if not initial and value and len(value) <= 256 else '')
+            emit('clipboard', sequence=count, text=str(value) if not initial and value and len(value) <= 256 else '',pid=context()[0])
         return board, count
 
     def screens():
