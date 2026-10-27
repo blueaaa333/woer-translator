@@ -1,7 +1,7 @@
 """Release checks, not a legal warranty. Refuse missing notices/private resources."""
 import hashlib,json,re,sqlite3,sys
 from pathlib import Path
-REQUIRED=('WordNet-LICENSE.txt','COW-LICENSE.txt','CC-BY-SA-4.0.html','Wiktionary-NOTICE.md','Lucide-LICENSE.txt','OpenCC-LICENSE.txt','OpenCC-NOTICE.txt')
+REQUIRED=('IAccessible2-BSD.txt','WordNet-LICENSE.txt','COW-LICENSE.txt','CC-BY-SA-4.0.html','Wiktionary-NOTICE.md','Lucide-LICENSE.txt','OpenCC-LICENSE.txt','OpenCC-NOTICE.txt')
 NATIVE=('Python-LICENSE.txt','CPython-incorporated-software.rst','OpenSSL-LICENSE.txt','zlib-LICENSE.txt','Expat-LICENSE.txt','libmpdec-NOTICE.txt','libffi-LICENSE.txt','bzip2-LICENSE.txt','XZ-liblzma-COPYING.txt','tcl-license.terms','tk-license.terms')
 
 def audit(base):

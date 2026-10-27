@@ -18,3 +18,8 @@ $selection=Join-Path $PSScriptRoot 'SelectionRangeTests.exe'
 if($LASTEXITCODE -ne 0){throw 'Selection range tests compilation failed'}
 & $selection
 if($LASTEXITCODE -ne 0){throw 'Selection range tests failed'}
+$browser=Join-Path $PSScriptRoot 'BrowserTextSelectionTests.exe'
+& $compiler /nologo /r:Accessibility.dll "/out:$browser" (Join-Path $PSScriptRoot 'BrowserTextSelectionTests.cs') (Join-Path $project 'BrowserTextSelection.cs') (Join-Path $project 'ToolbarLifecyclePolicy.cs')
+if($LASTEXITCODE -ne 0){throw 'Browser selection test compilation failed'}
+& $browser
+if($LASTEXITCODE -ne 0){throw 'Browser selection tests failed'}

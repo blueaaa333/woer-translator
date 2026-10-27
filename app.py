@@ -135,6 +135,11 @@ def selection_monitor_once():
    f=line.decode('utf-8-sig').strip().split('|')
    if f[0]=='READY':
     record_stage('listener_ready');continue
+   if f[0]=='COPY':
+    if len(f)==5 and all(re.fullmatch(r'-?\d+',v) for v in f[1:]):
+     from copy_intent import recent_copy
+     recent_copy.record(*(int(v) for v in f[1:]))
+    continue
    if f[0]=='CLEAR':
     if len(f)==4 and f[2].isdigit() and f[3].isdigit():
      detail=dict(reason=f[1],at=int(f[2]),pid=int(f[3]));events.put(('clear',detail));record_stage('clear_received',**detail)
@@ -532,9 +537,22 @@ class App:
   else:pid=mac.clipboard_owner_pid();hwnd=pid
   if not pid or pid==os.getpid():return
   source=dict(pid=pid,hwnd=hwnd,x=self.root.winfo_pointerx(),y=self.root.winfo_pointery(),id=-int(self.seq),emitted=int(time.time()*1000),word='',clipboard_word=text)
+  if IS_WINDOWS:
+   source['copy_sequence']=u.GetClipboardSequenceNumber()
+   if self.try_explicit_copy(source):return
+   self.root.after(60,lambda:self.try_explicit_copy(source))
   self.offer_selection(source)
+ def try_explicit_copy(self,source):
+  from copy_intent import recent_copy
+  from selection_verifier import source_is_active
+  if not self.auto.get() or not source_is_active(source):return False
+  sequence=u.GetClipboardSequenceNumber()
+  if sequence!=source.get('copy_sequence'):return False
+  if not recent_copy.consume(source['pid'],source['hwnd'],sequence):return False
+  self.close_floating('explicit_copy');self.prompt('',source);return True
  def finish_selection(self,payload):
   serial,source,confirmed=payload
+  record_stage('selection_check',id=source['id'],confirmed=bool(confirmed),reason=str(getattr(self.verifier,'last_reason','unknown')))
   if serial!=self.selection_version or not self.pending_gesture or self.pending_gesture['id']!=source['id']:return
   self.pending_gesture=None
   enabled=self.auto.get() if source.get('clipboard_word') else self.selection.get()

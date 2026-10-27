@@ -46,3 +46,7 @@
 解包核查 v0.3.10 时发现仅收集 Python 根许可证和 Python 包许可不足以覆盖所有附带原生库，尤其没有单独附 OpenSSL Apache-2.0 许可全文。本版增加与解释器版本对应的 CPython incorporated-software 声明、实际 OpenSSL 和 zlib 版本许可、Expat、libmpdec、libffi、bzip2 和 liblzma 的声明；原始 URL 与 SHA-256 记录于包内 licenses/runtime/native-components.json。SQLite 原生数据库使用上游公有领域代码，Python 绑定保留 Python 自身许可。Windows CRT 的发行声明保留在官方解释器的 Python-LICENSE.txt 中。Mac 系统库的调用不等于软件重新分发 Apple 系统组件。
 
 源码中的 licenses/native-reference/ 是本次核查参考文本，不冒充所有平台的实际 SBOM。实际安装包的版本以 build-info.json 及原生声明索引为准。以前版本的用户应升级到 v0.3.11，以取得补齐的声明；旧版本的许可收集缺口不能因补充一段说明就被宣称不存在。
+
+## Windows 浏览器选区接口
+
+BrowserTextSelection.cs 的 IAccessible2 COM 接口声明按 Linux Foundation 的 AccessibleText.idl 核对，保留其 BSD 声明于 licenses/IAccessible2-BSD.txt。其他检测逻辑为本项目实现。仅调用 Windows 自带 oleacc／Accessibility 接口，不捆绑第三方浏览器程序。

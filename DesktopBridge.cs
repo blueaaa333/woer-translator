@@ -19,7 +19,8 @@ class DesktopBridge {
  static POINT start,last;static DateTime release=DateTime.MinValue;
  static bool lastWasClick;static IntPtr lastSource=IntPtr.Zero;
  static IntPtr source=IntPtr.Zero; static uint sourcePid;static int sequence;static string pending,clearPending;
- static System.Windows.Forms.Timer debounce;static int parent;
+ static System.Windows.Forms.Timer debounce;static int parent;static string copyPending;
+ [DllImport("user32.dll")]static extern uint GetClipboardSequenceNumber();
  [DllImport("user32.dll")] static extern IntPtr SetWindowsHookEx(int id,MouseProc cb,IntPtr module,uint tid);
  [DllImport("user32.dll",EntryPoint="SetWindowsHookExA")] static extern IntPtr SetKeyHook(int id,KeyProc cb,IntPtr module,uint tid);
  [DllImport("user32.dll")] static extern bool UnhookWindowsHookEx(IntPtr h);
@@ -62,7 +63,12 @@ class DesktopBridge {
   if(n>=0 && (w.ToInt32()==0x100 || w.ToInt32()==0x104)) {
    int key=Marshal.ReadInt32(l);uint flags=unchecked((uint)Marshal.ReadInt32(l,8));
    if((flags&0x10)!=0)return CallNextHookEx(keyHook,n,w,l);
-   uint pid;GetWindowThreadProcessId(GetForegroundWindow(),out pid);
+   uint pid;IntPtr foreground=GetForegroundWindow();GetWindowThreadProcessId(foreground,out pid);
+   bool control=(GetAsyncKeyState(17)&0x8000)!=0;
+   if(control&&(key==67||key==45)&&pid!=parent) {
+    long at=(long)(DateTime.UtcNow-new DateTime(1970,1,1)).TotalMilliseconds;
+    copyPending="COPY|"+pid+"|"+foreground.ToInt64()+"|"+GetClipboardSequenceNumber()+"|"+at;
+   }
    string reason=ToolbarLifecyclePolicy.KeyboardReason(key,flags,(GetAsyncKeyState(17)&0x8000)!=0,(GetAsyncKeyState(18)&0x8000)!=0,pid==parent);
    if(reason!=null){pending=null;Cancel(reason,pid);}
   }
@@ -104,11 +110,18 @@ class DesktopBridge {
   }
   return false;
  }
+ static string verifyReason="starting";
  static bool SelectionReady(uint pid,IntPtr hwnd,int x,int y,string expected) {
+  verifyReason="foreground_changed";
   if(GetForegroundWindow()!=hwnd)return false;
   uint actual;GetWindowThreadProcessId(hwnd,out actual);if(actual!=pid)return false;
   bool copying=expected!=null;
+  verifyReason="pointer_covered";
   if(!copying&&GetAncestor(WindowFromPoint(new POINT{X=x,Y=y}),2)!=hwnd)return false;
+  // Chromium/PDF can expose IA2 text selection even when its UIA bridge has no range.
+  verifyReason="ia2";
+  try{if(BrowserTextSelection.AtPoint(x,y,expected,NormalizeQuery,ValidQuery))return GetForegroundWindow()==hwnd;}catch(COMException){}
+  verifyReason="uia_point";
   var root=AutomationElement.FromHandle(hwnd);
   AutomationElement element=copying?AutomationElement.FocusedElement:AutomationElement.FromPoint(new System.Windows.Point(x,y));
   if(element!=null) {
@@ -119,13 +132,14 @@ class DesktopBridge {
   }
   // Chromium's PDF document is sometimes a sibling of the hit-tested surface,
   // so walking only upward from the mouse cannot reach its TextPattern.
+  verifyReason="uia_documents";
   var documents=root.FindAll(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Document));
   for(int i=0;i<documents.Count&&i<24;i++) {
    var document=documents[i];
    if(document.Current.IsOffscreen)continue;
    if(CheckSelectedRange(document,x,y,expected))return GetForegroundWindow()==hwnd;
   }
-  return false;
+  verifyReason="no_accessible_selection";return false;
  }
  static void VerifyServer(int owner) {
   using(var life=new System.Threading.Timer(_=>{try{if(Process.GetProcessById(owner).HasExited)Environment.Exit(0);}catch{Environment.Exit(0);}},null,1000,1000)) {
@@ -137,8 +151,8 @@ class DesktopBridge {
      try{var f=line.Split('|');string expected=f.Length>4&&!String.IsNullOrEmpty(f[4])?Encoding.UTF8.GetString(Convert.FromBase64String(f[4])):null;
       selected=SelectionReady(uint.Parse(f[0]),new IntPtr(long.Parse(f[1])),int.Parse(f[2]),int.Parse(f[3]),expected);
       if(!selected){System.Threading.Thread.Sleep(75);selected=SelectionReady(uint.Parse(f[0]),new IntPtr(long.Parse(f[1])),int.Parse(f[2]),int.Parse(f[3]),expected);}
-     }catch{}
-     Console.WriteLine(selected?"SELECTED":"EMPTY");Console.Out.Flush();
+     }catch(Exception error){verifyReason=error.GetType().Name;}
+     Console.WriteLine((selected?"SELECTED":"EMPTY")+"|"+verifyReason);Console.Out.Flush();
     }
    });thread.IsBackground=true;thread.SetApartmentState(System.Threading.ApartmentState.MTA);thread.Start();thread.Join();
   }
@@ -179,7 +193,7 @@ class DesktopBridge {
  static void Watch(int parentId) {
   parent=parentId;
   debounce=new System.Windows.Forms.Timer();debounce.Interval=16;
-  debounce.Tick+=(s,e)=>{string clear=clearPending;clearPending=null;string message=pending;pending=null;if(clear!=null)Console.WriteLine(clear);if(message!=null)Console.WriteLine(message);if(clear!=null||message!=null)Console.Out.Flush();};debounce.Start();
+  debounce.Tick+=(s,e)=>{string copy=copyPending;copyPending=null;if(copy!=null)Console.WriteLine(copy);string clear=clearPending;clearPending=null;string message=pending;pending=null;if(clear!=null)Console.WriteLine(clear);if(message!=null)Console.WriteLine(message);if(copy!=null||clear!=null||message!=null)Console.Out.Flush();};debounce.Start();
   var life=new System.Windows.Forms.Timer();life.Interval=1500;
   life.Tick+=(s,e)=>{try {if(Process.GetProcessById(parent).HasExited)Application.Exit();}catch{Application.Exit();}};life.Start();
   hook=SetWindowsHookEx(14,mouseProc,GetModuleHandle(null),0);

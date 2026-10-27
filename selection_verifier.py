@@ -42,6 +42,7 @@ class SelectionVerifier:
             try:server.wait(timeout=1)
             except (OSError,subprocess.TimeoutExpired):pass
     def windows_check(self,source=None):
+        self.last_reason='starting'
         try:
             if not self.server or self.server.poll() is not None:
                 self.reset_server();lines=queue.Queue()
@@ -60,9 +61,12 @@ class SelectionVerifier:
             if server is None or self.stop.is_set():return False
             server.stdin.write(message.encode());server.stdin.flush()
             answer=self.lines.get(timeout=1.5)
-            if answer not in (b'SELECTED',b'EMPTY'):raise OSError('Verifier stopped')
-            return answer==b'SELECTED'
-        except (OSError,queue.Empty,ValueError):
+            status,_,reason=answer.partition(b'|')
+            if status not in (b'SELECTED',b'EMPTY'):raise OSError('Verifier stopped')
+            self.last_reason=reason.decode('ascii',errors='replace') or status.decode()
+            return status==b'SELECTED'
+        except (OSError,queue.Empty,ValueError) as error:
+            self.last_reason='timeout' if isinstance(error,queue.Empty) else type(error).__name__
             self.reset_server();return False
     def submit(self,serial,source):
         if self.stop.is_set():return
