@@ -194,82 +194,13 @@ class DesktopBridge {
    if(args[0]=="select") {
     uint pid;GetWindowThreadProcessId(GetForegroundWindow(),out pid);
     if(pid!=uint.Parse(args[1]))return 0;
-    string text=Read(AutomationElement.FromPoint(new System.Windows.Point(int.Parse(args[2]),int.Parse(…4624 tokens truncated…50；可手动或复制查询。')
-                    last_permissions_check = now
-                for _ in range(32):
-                    try:
-                        command = commands.get_nowait()
-                    except queue.Empty:
-                        break
-                    if command['kind'] == 'permissions':
-                        AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: True})
-                        if hasattr(Q, 'CGRequestListenEventAccess'):
-                            Q.CGRequestListenEventAccess()
-                        last_permissions_check = 0
-                    elif command['kind'] == 'regions':
-                        regions = command['regions']
-                    elif command['kind'] == 'self_test_pause' and '--native-self-test' in sys.argv:
-                        emit('self_test_started')
-                        time.sleep(2)
-                        emit('self_test_resumed')
-                    elif command['kind'] == 'query':
-                        if now-command['created'] > 2:
-                            emit('mac_query_result', value=dict(version=command['version'], error='取词请求已过期，请重新选词。'))
-                            continue
-                        if not permissions()['accessibility']:
-                            emit('mac_query_result', value=dict(version=command['version'], error='请先开启辅助功能权限，再重新选中单词。'))
-                            continue
-                        app = NSRunningApplication.runningApplicationWithProcessIdentifier_(int(command['pid']))
-                        if not app or not app.activateWithOptions_(NSApplicationActivateIgnoringOtherApps):
-                            emit('mac_query_result', value=dict(version=command['version'], error='来源应用已关闭，请重新选词。'))
-                            continue
-                        pending = dict(command, stage='activate', due=now+.12, deadline=now+1.5)
-                if pending and now >= pending['due']:
-                    if context()[0] != pending['pid']:
-                        emit('mac_query_result', value=dict(version=pending['version'], error='来源应用未能激活，请重新选词。'))
-                        pending = None
-                    elif pending['stage'] == 'activate':
-                        board = NSPasteboard.generalPasteboard()
-                        board.clearContents()
-                        pending.update(stage='copy', before=int(board.changeCount()), due=now+.035)
-                        clipboard(force=True)
-                        for down in (True, False):
-                            event = Q.CGEventCreateKeyboardEvent(None, 8, down)
-                            Q.CGEventSetFlags(event, Q.kCGEventFlagMaskCommand)
-                            Q.CGEventPost(Q.kCGHIDEventTap, event)
-                    else:
-                        board, count = clipboard()
-                        value = board.stringForType_(NSPasteboardTypeString) if count != pending['before'] else None
-                        word = normalize_query(str(value)) if value and len(value) <= 256 else ''
-                        if valid_query(word):
-                            emit('mac_query_result', value=dict(version=pending['version'], word=word))
-                            pending = None
-                        elif now >= pending['deadline']:
-                            emit('mac_query_result', value=dict(version=pending['version'], error='没有读取到本次选区，请重新选中或主动复制单词。'))
-                            pending = None
-                if now-last_clipboard >= .2 and not pending:
-                    clipboard()
-                    last_clipboard = now
-                for _ in range(128):
-                    try:
-                        raw = raw_events.get_nowait()
-                    except queue.Empty:
-                        break
-                    result = gestures.handle(raw, context())
-                    if result:
-                        emit(result[0], value=result[1])
-                CFRunLoopRunInMode(kCFRunLoopDefaultMode, .025, True)
-                # A run loop without any event source may return immediately.
-                if not tap:
-                    stop.wait(.025)
-    finally:
-        if tap:
-            Q.CGEventTapEnable(tap, False)
-            if source_ref:
-                CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source_ref, kCFRunLoopCommonModes)
-            CFMachPortInvalidate(tap)
-        channel.close()
-
-
-if __name__ == '__main__':
-    run()
+    string text=Read(AutomationElement.FromPoint(new System.Windows.Point(int.Parse(args[2]),int.Parse(args[3]))));
+    if(text.Length==0)text=Read(AutomationElement.FocusedElement);
+    Console.WriteLine(text);return 0;
+   }
+   if(args[0]=="voices")return Speak("","",true);
+   if(args[0]=="speak" && ValidQuery(NormalizeQuery(args[2])))return Speak(args[1],NormalizeQuery(args[2]),false);
+  } catch(Exception ex) {Console.Error.WriteLine(ex.GetType().Name);return 2;}
+  return 1;
+ }
+}
