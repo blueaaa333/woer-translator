@@ -3,6 +3,10 @@ if __name__=='__main__' and '--apply-mac-update' in sys.argv:
  from updater import apply_mac
  apply_mac(sys.argv[sys.argv.index('--apply-mac-update')+1])
  raise SystemExit
+if __name__=='__main__' and '--mac-verify-selection' in sys.argv:
+ from mac_selection import main
+ main()
+ raise SystemExit
 if __name__=='__main__' and '--mac-bridge' in sys.argv:
  from mac_native import run
  run()
@@ -168,6 +172,8 @@ def selection_monitor():
 class App:
  def __init__(self,testing=False):
   self.lexicon=Lexicon(BASE);self.db=self.lexicon.db;self.result=None;self.online=None;self.use_online=False;self.dictionary_gate=threading.BoundedSemaphore(2);self.word='';self.seq=clipboard_sequence();self.popup=None;self.testing=testing
+  from selection_verifier import SelectionVerifier
+  self.pending_gesture=None;self.verifier=SelectionVerifier(BASE,events)
   self.speech=SpeechEngine(BASE,DATA/'speech-cache',user_root=DATA/'speech')
   self.preference_store=PreferenceStore(DATA/'preferences.json',read_only=testing)
   self.preferences=self.read_preferences();self.settings_popup=None
@@ -180,6 +186,7 @@ class App:
   self.root.geometry(f'{round(380*self.scale)}x{round(420*self.scale)}');self.root.configure(bg='#dce7fb');self.root.overrideredirect(True);self.root.attributes('-topmost',True)
   self.root.option_add('*Font',(UI_FONT,10))
   self.root.report_callback_exception=self.on_error
+  self.root.bind('<FocusIn>',self.cancel_pending_verification,add='+')
   sizes=[16,18,20,24,27,30,32,36,40,48,64];size=min(sizes,key=lambda n:abs(n-18*self.scale))
   self.brand_icon=tk.PhotoImage(file=str(BASE/'assets'/f'brand-{size}.png'))
   if IS_WINDOWS:self.root.iconbitmap(str(BASE/'assets'/'沃尔翻译官.ico'))
@@ -244,6 +251,7 @@ class App:
   compatibility_enabled.set() if self.preferences.get('selection_compatibility',True) else compatibility_enabled.clear()
   self.selection.trace_add('write',lambda *args:self.save_preferences());self.auto.trace_add('write',lambda *args:self.save_preferences())
   if not testing:
+   self.verifier.warm()
    threading.Thread(target=hotkeys,daemon=True).start();threading.Thread(target=selection_monitor,daemon=True).start()
   self.root.bind('<Destroy>',lambda e:self.shutdown() if e.widget is self.root else None)
   from update_ui import UpdatePanel
@@ -280,6 +288,7 @@ class App:
    except tk.TclError:pass
   if getattr(self,'updates',None):self.updates.close()
   self.audio_serial+=1
+  self.verifier.close()
   self.speech.close()
   if not self.testing:stop_children()
   self.player.close() if self.player else winsound.PlaySound(None,0)
@@ -371,10 +380,11 @@ class App:
    record_stage('popup_closed',reason=reason,id=self.pending_source['id'] if self.pending_source else None,age_ms=round((time.monotonic()-self.last_prompt_time)*1000))
   for win in (self.popup,self.settings_popup):
    if win and win.winfo_exists():win.destroy()
-  self.pending_source=None
+  self.pending_source=None;self.pending_gesture=None
  def dismiss_from_input(self,detail):
-  if detail and self.pending_source and detail['at']<=self.pending_source['emitted']:
-   record_stage('clear_ignored_stale',reason=detail['reason'],id=self.pending_source['id']);return
+  source=self.pending_gesture or self.pending_source
+  if detail and source and detail['at']<=source['emitted']:
+   record_stage('clear_ignored_stale',reason=detail['reason'],id=source['id']);return
   self.close_floating(detail['reason'] if detail else 'explicit')
  def round_window(self,win,radius=13):
   if not IS_WINDOWS:return
@@ -505,6 +515,32 @@ class App:
   rect=self.work_area(x,y)
   x=max(rect.left+4,min(x+10,rect.right-width-4));y=y+24 if y+height+30<rect.bottom else y-height-12
   y=max(rect.top+4,min(y,rect.bottom-height-4));win.geometry(f'{width}x{height}{x:+d}{y:+d}')
+ def cancel_pending_verification(self,event=None):
+  if self.pending_gesture:
+   self.selection_version+=1;self.pending_gesture=None
+ def offer_selection(self,source):
+  self.close_floating('checking_selection')
+  self.pending_gesture=source
+  self.verifier.submit(self.selection_version,source)
+ def offer_clipboard(self,text):
+  text=normalize_query(text)
+  if not valid_query(text):return
+  if IS_WINDOWS:
+   from ctypes import wintypes
+   u.GetForegroundWindow.restype=C.c_void_p;hwnd=u.GetForegroundWindow()
+   pid=wintypes.DWORD();u.GetWindowThreadProcessId.argtypes=[C.c_void_p,C.POINTER(wintypes.DWORD)];u.GetWindowThreadProcessId(hwnd,C.byref(pid));pid=pid.value
+  else:pid=mac.clipboard_owner_pid();hwnd=pid
+  if not pid or pid==os.getpid():return
+  source=dict(pid=pid,hwnd=hwnd,x=self.root.winfo_pointerx(),y=self.root.winfo_pointery(),id=-int(self.seq),emitted=int(time.time()*1000),word='',clipboard_word=text)
+  self.offer_selection(source)
+ def finish_selection(self,payload):
+  serial,source,confirmed=payload
+  if serial!=self.selection_version or not self.pending_gesture or self.pending_gesture['id']!=source['id']:return
+  self.pending_gesture=None
+  enabled=self.auto.get() if source.get('clipboard_word') else self.selection.get()
+  if confirmed and enabled:
+   from selection_verifier import source_is_active
+   if source_is_active(source):self.prompt('',source)
  def prompt(self,s,source=None):
   s=normalize_query(s)
   if not source and not valid_query(s):return
@@ -620,7 +656,7 @@ class App:
  def lookup(self,s,accent=None,anchor=None):
   s=normalize_query(s).lower()
   if not valid_query(s):return
-  self.selection_version+=1
+  self.selection_version+=1;self.pending_gesture=None
   self.word=s;self.entry.delete(0,'end');self.entry.insert(0,s);self.entry.icursor('end')
   self.result=self.lexicon.lookup(s)
   self.online=None
@@ -744,13 +780,14 @@ class App:
      try:value=clipboard(strict=True)
      except ClipboardBusy:pass
      else:
-      self.seq=seq;self.prompt(value)
+      self.seq=seq;self.offer_clipboard(value)
     else:self.seq=seq
    deadline=time.monotonic()+.008
    while not events.empty() and time.monotonic()<deadline:
     kind,value=events.get_nowait()
     if kind=='clear':self.dismiss_from_input(value)
-    elif kind=='gesture':self.prompt('',value)
+    elif kind=='gesture':self.offer_selection(value)
+    elif kind=='selection_verified':self.finish_selection(value)
     elif kind=='resolved':
      identifier,word=value
      if self.pending_source and self.pending_source['id']==identifier:self.pending_source['word']=word
@@ -778,7 +815,7 @@ class App:
      if self.settings_popup and self.settings_popup.winfo_exists():self.settings_popup.destroy();self.menu()
     elif kind=='voices_ready':self.voice_installing=False;self.status.config(text=value)
     elif kind=='selection':
-     if self.selection.get():self.prompt(value)
+     if self.selection.get():self.offer_clipboard(value)
     elif kind=='show':self.show();self.status.config(text=value)
     else:self.status.config(text=value)
   except Exception:

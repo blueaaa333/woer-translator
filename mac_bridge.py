@@ -17,7 +17,7 @@ class MacBridge:
         self.data = Path(data)
         self.commands = queue.Queue(maxsize=32)
         self.lock = threading.Lock()
-        self.sequence, self.text, self.screens = 0, '', []
+        self.sequence, self.text, self.screens = 0, '', [];self.clipboard_pid=0
         self.ready = threading.Event()
         self.test_resumed = threading.Event()
         self.test_pause_started = None
@@ -48,6 +48,7 @@ class MacBridge:
             with self.lock:
                 self.sequence = int(message['sequence'])
                 self.text = message['text']
+                self.clipboard_pid = int(message.get('pid',0))
         elif kind == 'screens':
             with self.lock:
                 self.screens = message['areas']

@@ -80,6 +80,44 @@ class DesktopBridge {
   var document=root.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Document));
   return document==null?"":Read(document);
  }
+ static bool SelectionReady(uint pid,IntPtr hwnd,int x,int y,string expected) {
+  if(GetForegroundWindow()!=hwnd)return false;
+  uint actual;GetWindowThreadProcessId(hwnd,out actual);if(actual!=pid)return false;
+  bool copying=expected!=null;
+  if(!copying&&GetAncestor(WindowFromPoint(new POINT{X=x,Y=y}),2)!=hwnd)return false;
+  AutomationElement element=copying?AutomationElement.FocusedElement:AutomationElement.FromPoint(new System.Windows.Point(x,y));
+  if(element==null)return false;
+  var role=element.Current.ControlType;
+  if(!copying&&(role==ControlType.ScrollBar||role==ControlType.Thumb||role==ControlType.Image||role==ControlType.Button||role==ControlType.Slider||role==ControlType.TitleBar))return false;
+  for(int depth=0;element!=null&&depth<6;depth++,element=TreeWalker.ControlViewWalker.GetParent(element)) {
+   if(element.Current.IsPassword)return false;
+   object pattern;
+   if(!element.TryGetCurrentPattern(TextPattern.Pattern,out pattern))continue;
+   foreach(var range in ((TextPattern)pattern).GetSelection()) {
+    bool nonempty=range.CompareEndpoints(System.Windows.Automation.Text.TextPatternRangeEndpoint.Start,range,System.Windows.Automation.Text.TextPatternRangeEndpoint.End)!=0;
+    if(!nonempty||!ValidQuery(NormalizeQuery(range.GetText(81))))continue;
+    if(copying) {
+     if(String.Equals(NormalizeQuery(range.GetText(81)),NormalizeQuery(expected),StringComparison.OrdinalIgnoreCase))return true;
+    } else {foreach(var rect in range.GetBoundingRectangles())if(ToolbarLifecyclePolicy.SelectionNear(new double[]{rect.X,rect.Y,rect.Width,rect.Height},x,y,nonempty))return true;}
+   }
+  }
+  return false;
+ }
+ static void VerifyServer(int owner) {
+  using(var life=new System.Threading.Timer(_=>{try{if(Process.GetProcessById(owner).HasExited)Environment.Exit(0);}catch{Environment.Exit(0);}},null,1000,1000)) {
+   var thread=new System.Threading.Thread(()=>{
+    try{AutomationElement.RootElement.GetRuntimeId();}catch{}
+    Console.WriteLine("READY");Console.Out.Flush();string line;
+    while((line=Console.ReadLine())!=null) {
+     bool selected=false;
+     try{var f=line.Split('|');string expected=f.Length>4&&!String.IsNullOrEmpty(f[4])?Encoding.UTF8.GetString(Convert.FromBase64String(f[4])):null;
+      selected=SelectionReady(uint.Parse(f[0]),new IntPtr(long.Parse(f[1])),int.Parse(f[2]),int.Parse(f[3]),expected);
+     }catch{}
+     Console.WriteLine(selected?"SELECTED":"EMPTY");Console.Out.Flush();
+    }
+   });thread.IsBackground=true;thread.SetApartmentState(System.Threading.ApartmentState.MTA);thread.Start();thread.Join();
+  }
+ }
  static void Serve() {
   Console.WriteLine("READY");Console.Out.Flush();string request;
   while((request=Console.ReadLine())!=null) {
@@ -141,18 +179,97 @@ class DesktopBridge {
   try {SetProcessDpiAwarenessContext(new IntPtr(-4));}catch(EntryPointNotFoundException){}
   Console.OutputEncoding=new UTF8Encoding(false);
   try {
+   if(args[0]=="verify-server"){VerifyServer(int.Parse(args[1]));return 0;}
    if(args[0]=="watch") {Watch(int.Parse(args[1]));return 0;}
+   if(args[0]=="verify") {
+    var deadline=new System.Threading.Thread(()=>{System.Threading.Thread.Sleep(1200);Environment.Exit(4);});deadline.IsBackground=true;deadline.Start();
+    string line=Console.ReadLine();string expected=String.IsNullOrEmpty(line)?null:Encoding.UTF8.GetString(Convert.FromBase64String(line));
+    bool selected=false;
+    var verifyThread=new System.Threading.Thread(()=>{try{selected=SelectionReady(uint.Parse(args[1]),new IntPtr(long.Parse(args[2])),int.Parse(args[3]),int.Parse(args[4]),expected);}catch{selected=false;}});
+    verifyThread.IsBackground=true;verifyThread.SetApartmentState(System.Threading.ApartmentState.MTA);verifyThread.Start();
+    bool completed=verifyThread.Join(420);
+    Console.WriteLine(completed&&selected?"SELECTED":"EMPTY");return 0;
+   }
    if(args[0]=="serve") {Serve();return 0;}
    if(args[0]=="select") {
     uint pid;GetWindowThreadProcessId(GetForegroundWindow(),out pid);
     if(pid!=uint.Parse(args[1]))return 0;
-    string text=Read(AutomationElement.FromPoint(new System.Windows.Point(int.Parse(args[2]),int.Parse(args[3]))));
-    if(text.Length==0)text=Read(AutomationElement.FocusedElement);
-    Console.WriteLine(text);return 0;
-   }
-   if(args[0]=="voices")return Speak("","",true);
-   if(args[0]=="speak" && ValidQuery(NormalizeQuery(args[2])))return Speak(args[1],NormalizeQuery(args[2]),false);
-  } catch(Exception ex) {Console.Error.WriteLine(ex.GetType().Name);return 2;}
-  return 1;
- }
-}
+    string text=Read(AutomationElement.FromPoint(new System.Windows.Point(int.Parse(args[2]),int.Parse(…4624 tokens truncated…50；可手动或复制查询。')
+                    last_permissions_check = now
+                for _ in range(32):
+                    try:
+                        command = commands.get_nowait()
+                    except queue.Empty:
+                        break
+                    if command['kind'] == 'permissions':
+                        AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: True})
+                        if hasattr(Q, 'CGRequestListenEventAccess'):
+                            Q.CGRequestListenEventAccess()
+                        last_permissions_check = 0
+                    elif command['kind'] == 'regions':
+                        regions = command['regions']
+                    elif command['kind'] == 'self_test_pause' and '--native-self-test' in sys.argv:
+                        emit('self_test_started')
+                        time.sleep(2)
+                        emit('self_test_resumed')
+                    elif command['kind'] == 'query':
+                        if now-command['created'] > 2:
+                            emit('mac_query_result', value=dict(version=command['version'], error='取词请求已过期，请重新选词。'))
+                            continue
+                        if not permissions()['accessibility']:
+                            emit('mac_query_result', value=dict(version=command['version'], error='请先开启辅助功能权限，再重新选中单词。'))
+                            continue
+                        app = NSRunningApplication.runningApplicationWithProcessIdentifier_(int(command['pid']))
+                        if not app or not app.activateWithOptions_(NSApplicationActivateIgnoringOtherApps):
+                            emit('mac_query_result', value=dict(version=command['version'], error='来源应用已关闭，请重新选词。'))
+                            continue
+                        pending = dict(command, stage='activate', due=now+.12, deadline=now+1.5)
+                if pending and now >= pending['due']:
+                    if context()[0] != pending['pid']:
+                        emit('mac_query_result', value=dict(version=pending['version'], error='来源应用未能激活，请重新选词。'))
+                        pending = None
+                    elif pending['stage'] == 'activate':
+                        board = NSPasteboard.generalPasteboard()
+                        board.clearContents()
+                        pending.update(stage='copy', before=int(board.changeCount()), due=now+.035)
+                        clipboard(force=True)
+                        for down in (True, False):
+                            event = Q.CGEventCreateKeyboardEvent(None, 8, down)
+                            Q.CGEventSetFlags(event, Q.kCGEventFlagMaskCommand)
+                            Q.CGEventPost(Q.kCGHIDEventTap, event)
+                    else:
+                        board, count = clipboard()
+                        value = board.stringForType_(NSPasteboardTypeString) if count != pending['before'] else None
+                        word = normalize_query(str(value)) if value and len(value) <= 256 else ''
+                        if valid_query(word):
+                            emit('mac_query_result', value=dict(version=pending['version'], word=word))
+                            pending = None
+                        elif now >= pending['deadline']:
+                            emit('mac_query_result', value=dict(version=pending['version'], error='没有读取到本次选区，请重新选中或主动复制单词。'))
+                            pending = None
+                if now-last_clipboard >= .2 and not pending:
+                    clipboard()
+                    last_clipboard = now
+                for _ in range(128):
+                    try:
+                        raw = raw_events.get_nowait()
+                    except queue.Empty:
+                        break
+                    result = gestures.handle(raw, context())
+                    if result:
+                        emit(result[0], value=result[1])
+                CFRunLoopRunInMode(kCFRunLoopDefaultMode, .025, True)
+                # A run loop without any event source may return immediately.
+                if not tap:
+                    stop.wait(.025)
+    finally:
+        if tap:
+            Q.CGEventTapEnable(tap, False)
+            if source_ref:
+                CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source_ref, kCFRunLoopCommonModes)
+            CFMachPortInvalidate(tap)
+        channel.close()
+
+
+if __name__ == '__main__':
+    run()

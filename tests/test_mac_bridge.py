@@ -83,10 +83,10 @@ class MacBridgeTests(unittest.TestCase):
         with patch('app.clipboard_sequence',return_value=11),patch('app.clipboard',side_effect=[ClipboardBusy(),'water']):
             App.poll(fake)
             self.assertEqual(fake.seq,10)
-            fake.prompt.assert_not_called()
+            fake.offer_clipboard.assert_not_called()
             App.poll(fake)
             self.assertEqual(fake.seq,11)
-            fake.prompt.assert_called_once_with('water')
+            fake.offer_clipboard.assert_called_once_with('water')
         fake.on_error.assert_not_called()
 
     def test_stale_query_cannot_replace_a_newer_selection(self):

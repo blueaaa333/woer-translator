@@ -10,6 +10,9 @@ def clipboard_sequence():return _client.clipboard()[0] if _client else 0
 
 def clipboard_text():return _client.clipboard()[1] if _client else ''
 
+def clipboard_owner_pid():
+    return _client.clipboard_pid if _client else 0
+
 def request_permissions(events):
     if _client and _client.send('permissions'):
         events.put(('status','请在系统设置中允许辅助功能和输入监控，再返回阅读页面选词。'))
