@@ -18,6 +18,7 @@ def normalize(data):
         enabled = accent != 0
     data.update(auto_read=enabled, preferred_accent=preferred,
                 accent=preferred if enabled else 0)
+    data['edge_pdf_auto_copy']=data.get('edge_pdf_auto_copy') is True
     return data
 
 

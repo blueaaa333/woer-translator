@@ -155,6 +155,7 @@ def selection_monitor_once():
     event['clipboard_before']=int(f[6])
     from gesture_copy import recent_gesture
     recent_gesture.record(event)
+   event['app']=cache[pid]
    events.put(('gesture',event));record_stage('gesture_received',id=event['id'],source_pid=event['pid'],app=cache[pid])
  try:
   watch=start_bridge(['watch',str(os.getpid())],stdout=subprocess.PIPE,stderr=subprocess.DEVNULL)
@@ -445,6 +446,11 @@ class App:
     compatibility_enabled.set() if self.preferences['selection_compatibility'] else compatibility_enabled.clear()
    toggle('更多应用划词（兼容模式）',lambda:self.preferences.get('selection_compatibility',True),compatibility_toggle)
   toggle('复制后显示浮条',self.auto.get,lambda:self.auto.set(not self.auto.get()))
+  if IS_WINDOWS:
+   def pdf_copy_toggle():
+    self.preferences['edge_pdf_auto_copy']=not self.preferences.get('edge_pdf_auto_copy',False);self.save_preferences()
+   toggle('Edge PDF 自动复制取词',lambda:self.preferences.get('edge_pdf_auto_copy',False),pdf_copy_toggle)
+   tk.Label(f,text='兼容选项：会把选词写入剪贴板',bg='white',fg='#8a9aa6',font=(UI_FONT,8)).pack(anchor='w')
   tk.Frame(f,bg='#edf1f4',height=1).pack(fill='x',pady=(10,2))
   section('发音偏好')
   def recordings_toggle():
@@ -537,6 +543,29 @@ class App:
   self.verifier.submit(self.selection_version,source)
   if IS_WINDOWS and 'clipboard_before' in source:
    serial=self.selection_version;self.root.after(40,lambda:self.probe_source_copy(source,serial))
+   if not self.testing and self.preferences.get('edge_pdf_auto_copy',False):self.root.after(90,lambda:self.edge_pdf_probe(source,serial))
+ def edge_pdf_probe(self,source,serial):
+  if serial!=self.selection_version or not self.selection.get():return
+  if self.popup and self.popup.winfo_exists():return
+  from edge_pdf_copy import request_copy,fresh_copy
+  before=request_copy(source,u)
+  if before is None:return
+  self.clipboard_suppress_until=time.monotonic()+.7
+  def read(attempt=0):
+   if serial!=self.selection_version:return
+   from selection_verifier import source_is_active
+   if not source_is_active(source):return
+   sequence=u.GetClipboardSequenceNumber()
+   from ctypes import wintypes
+   u.GetClipboardOwner.restype=C.c_void_p;owner_pid=wintypes.DWORD()
+   u.GetWindowThreadProcessId(C.c_void_p(u.GetClipboardOwner()),C.byref(owner_pid))
+   if fresh_copy(source,before,sequence,owner_pid.value):
+    value=normalize_query(clipboard())
+    if valid_query(value):
+     self.seq=sequence;record_stage('edge_pdf_copy_confirmed',id=source['id'])
+     self.close_floating('edge_pdf_copy');self.prompt('',source);return
+   if attempt<25:self.root.after(15,lambda:read(attempt+1))
+  self.root.after(15,read)
  def probe_source_copy(self,source,serial,attempt=0):
   if serial!=self.selection_version:return
   from selection_verifier import source_is_active
@@ -589,8 +618,9 @@ class App:
   serial,source,confirmed=payload
   record_stage('selection_check',id=source['id'],confirmed=bool(confirmed),reason=str(getattr(self.verifier,'last_reason','unknown')))
   if serial!=self.selection_version or not self.pending_gesture or self.pending_gesture['id']!=source['id']:return
-  self.pending_gesture=None
   enabled=self.auto.get() if source.get('clipboard_word') else self.selection.get()
+  if not confirmed and enabled and 'clipboard_before' in source:return
+  self.pending_gesture=None
   if confirmed and enabled:
    from selection_verifier import source_is_active
    if source_is_active(source):self.prompt('',source)

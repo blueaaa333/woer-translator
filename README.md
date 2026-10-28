@@ -78,3 +78,7 @@ python -m unittest discover -s tests -p "test_*.py"
 ---
 
 Woer Translator is a compact desktop dictionary for Windows and macOS, with selection-triggered actions, Simplified Chinese definitions, usage examples, morphology explanations, and distinct UK/US speech. Original application code is MIT; third-party data and dependencies retain their own licenses. The initial macOS build is a preview without Developer ID signing or notarization.
+
+### Edge PDF 兼容选项
+
+若 Edge PDF 选词不弹出，可在“···”启用“Edge PDF 自动复制取词”。该功能默认关闭，启用后划词会执行一次 Ctrl+C，所选文字将写入剪贴板。仅确认产生新的有效源文字后显示工具条；不预先清空剪贴板。普通网页和其他软件不使用此兼容探测。

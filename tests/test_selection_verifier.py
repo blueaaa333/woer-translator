@@ -2,6 +2,12 @@ import queue,subprocess,unittest
 from unittest.mock import Mock,patch
 from selection_verifier import check_selection
 class SelectionVerifierTests(unittest.TestCase):
+ def test_unavailable_uia_does_not_cancel_scheduled_pdf_copy_probe(self):
+  from app import App
+  source=dict(self.source(),clipboard_before=3)
+  fake=Mock();fake.selection_version=1;fake.pending_gesture=source;fake.selection.get.return_value=True
+  App.finish_selection(fake,(1,source,False))
+  self.assertEqual(fake.pending_gesture,source);fake.prompt.assert_not_called()
  def test_pdf_provider_first_response_can_take_more_than_half_a_second(self):
   import threading
   from selection_verifier import SelectionVerifier
