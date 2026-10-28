@@ -43,10 +43,11 @@ class DesktopBridge {
   if(n>=0) {
    var m=(MOUSE)Marshal.PtrToStructure(l,typeof(MOUSE));int message=w.ToInt32();
    if(ToolbarLifecyclePolicy.IgnoreMouse(m.flags))return CallNextHookEx(hook,n,w,l);
-   if(message==0x201){sourceClipboard=GetClipboardSequenceNumber();start=m.pt;source=GetAncestor(WindowFromPoint(m.pt),2);GetWindowThreadProcessId(source,out sourcePid);
+   if(message==0x201){pending=null;sourceClipboard=GetClipboardSequenceNumber();start=m.pt;source=GetAncestor(WindowFromPoint(m.pt),2);GetWindowThreadProcessId(source,out sourcePid);
     if(sourcePid!=parent)Cancel("pointer_down",sourcePid);
     if(sourcePid!=parent)warmPending="WARM|"+sourcePid+"|"+source.ToInt64()+"|"+m.pt.X+"|"+m.pt.Y+"|"+(long)(DateTime.UtcNow-new DateTime(1970,1,1)).TotalMilliseconds;
    }
+   if(message==0x204||message==0x207){pending=null;uint target;GetWindowThreadProcessId(WindowFromPoint(m.pt),out target);if(target!=parent)Cancel("pointer_down",target);}
    if(message==0x205){uint target;GetWindowThreadProcessId(WindowFromPoint(m.pt),out target);if(target!=parent)Cancel("context_menu",target);}
    if(message==0x202) {
     var now=DateTime.UtcNow;

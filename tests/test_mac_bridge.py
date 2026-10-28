@@ -8,6 +8,15 @@ from mac_native import Gestures, over_own_window
 
 
 class MacGestureTests(unittest.TestCase):
+    def test_outside_press_hides_even_before_frontmost_pid_updates(self):
+        tracker=Gestures({10});raw=self.raw('down');raw['outside_our_windows']=True
+        for context in ((10,'our.app'),(12,'com.apple.finder')):
+            kind,detail=tracker.handle(raw,context)
+            self.assertEqual((kind,detail['reason']),('clear','pointer_down'))
+    def test_outside_mouse_press_reports_dismiss_before_release(self):
+        tracker=Gestures({10})
+        kind,detail=tracker.handle(self.raw('down'),(12,'com.browser'))
+        self.assertEqual((kind,detail['reason']),('clear','pointer_down'))
     def raw(self, kind, x=100, y=100, clicks=1, at=1000):
         return dict(type=kind, x=x, y=y, at=at, clicks=clicks)
 

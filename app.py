@@ -198,7 +198,7 @@ class App:
   self.player=AudioOutput() if IS_WINDOWS else None
   self.preferred_accent=self.preferences.get('preferred_accent',2)
   self.audio_serial=0;self.audio_lock=threading.Lock();self.accent=self.preferences.get('accent',0);self.last_prompt='';self.last_prompt_time=0;self.pending_source=None;self.clipboard_suppress_until=0;self.selection_version=0
-  self.root=tk.Tk();self.root.title('沃尔翻译官');self.dpi=u.GetDpiForSystem() if IS_WINDOWS and hasattr(u,'GetDpiForSystem') else 96;self.scale=self.dpi/96;
+  self.window_shown_at=int(time.time()*1000);self.root=tk.Tk();self.root.title('沃尔翻译官');self.dpi=u.GetDpiForSystem() if IS_WINDOWS and hasattr(u,'GetDpiForSystem') else 96;self.scale=self.dpi/96;
   if IS_WINDOWS:self.root.tk.call('tk','scaling',self.dpi/72)
   self.root.geometry(f'{round(380*self.scale)}x{round(420*self.scale)}');self.root.configure(bg='#dce7fb');self.root.overrideredirect(True);self.root.attributes('-topmost',True)
   self.root.option_add('*Font',(UI_FONT,10))
@@ -210,6 +210,7 @@ class App:
   else:
    self.root.iconphoto(True,self.brand_icon);self.root.createcommand('tk::mac::Quit',self.root.destroy)
   self.root.bind('<Escape>',lambda e:self.hide())
+  self.root.bind('<Map>',self.mark_window_shown,add='+')
   f=tk.Frame(self.root,bg='white',padx=16,pady=9);f.pack(fill='both',expand=True,padx=1,pady=1)
   head=tk.Frame(f,bg='white');head.pack(fill='x',pady=(0,5))
   self.button(head,'×',self.hide,small=True).pack(side='left')
@@ -275,6 +276,7 @@ class App:
   self.current_version=(BASE/'VERSION').read_text(encoding='utf-8').strip()
   self.updates=UpdatePanel(self,events,self.current_version,DATA,testing)
   self.root.after(25,self.poll)
+  if not IS_WINDOWS:self.watch_mac_window(self.root)
   if not testing:self.root.after(180,self.warm_toolbar)
   if not IS_WINDOWS and not testing and not self.preferences.get('mac_guide_seen',False):self.root.after(600,self.mac_welcome)
  def open_mac_guide(self):
@@ -406,6 +408,8 @@ class App:
    from gesture_copy import recent_gesture
    from copy_intent import recent_copy
    recent_gesture.cancel(detail['at']);recent_copy.cancel(detail['at'])
+  from outside_click import should_hide
+  if should_hide(detail,self.window_shown_at):self.root.withdraw()
   self.close_floating(detail['reason'] if detail else 'explicit')
  def round_window(self,win,radius=13):
   if not IS_WINDOWS:return
@@ -521,14 +525,17 @@ class App:
  def sync_mac_regions(self):
   if IS_WINDOWS:return
   regions=[]
-  for win in (self.popup,self.settings_popup,getattr(self,'welcome_popup',None)):
+  for win in (self.root,*[child for child in self.root.winfo_children() if isinstance(child,tk.Toplevel)]):
    if win and win.winfo_exists() and win.winfo_ismapped():
     regions.append(dict(left=win.winfo_rootx(),top=win.winfo_rooty(),right=win.winfo_rootx()+win.winfo_width(),bottom=win.winfo_rooty()+win.winfo_height()))
-  mac.update_regions(regions)
+  if regions!=getattr(self,'_sent_mac_regions',None):
+   mac.update_regions(regions);self._sent_mac_regions=regions
  def watch_mac_window(self,win):
   if IS_WINDOWS:return
   win.bind('<Configure>',lambda e:self.sync_mac_regions() if e.widget is win else None,add='+')
   win.bind('<Destroy>',lambda e:self.root.after_idle(self.sync_mac_regions) if e.widget is win else None,add='+')
+  win.bind('<Map>',lambda e:self.root.after_idle(self.sync_mac_regions) if e.widget is win else None,add='+')
+  win.bind('<Unmap>',lambda e:self.root.after_idle(self.sync_mac_regions) if e.widget is win else None,add='+')
   self.sync_mac_regions()
  def work_area(self,x,y):
   if not IS_WINDOWS:
@@ -546,7 +553,7 @@ class App:
   x=self.root.winfo_pointerx() if x is None else x;y=self.root.winfo_pointery() if y is None else y
   rect=self.work_area(x,y)
   x=max(rect.left+4,min(x+10,rect.right-width-4));y=y+24 if y+height+30<rect.bottom else y-height-12
-  y=max(rect.top+4,min(y,rect.bottom-height-4));win.geometry(f'{width}x{height}{x:+d}{y:+d}')
+  y=max(rect.top+4,min(y,rect.bottom-height-4));win.geometry(f'{width}x{height}{x:+d}{y:+d}');return x,y,width,height
  def cancel_pending_verification(self,event=None):
   if self.pending_gesture:
    self.selection_version+=1;self.pending_gesture=None
@@ -677,15 +684,15 @@ class App:
   self.button(bar,'复制',copy,small=True).pack(side='left',padx=3)
   self.button(bar,'×',p.destroy,small=True).pack(side='left',padx=3)
   if getattr(self,'_warming',False):p.update_idletasks();p.destroy();return
-  p.update_idletasks();self.position(p,max(round(290*self.scale),bar.winfo_reqwidth()+2),max(round(43*self.scale),bar.winfo_reqheight()+2),x=source['x'] if source else None,y=source['y'] if source else None,physical=True)
+  p.update_idletasks();placed=self.position(p,max(round(290*self.scale),bar.winfo_reqwidth()+2),max(round(43*self.scale),bar.winfo_reqheight()+2),x=source['x'] if source else None,y=source['y'] if source else None,physical=True)
   # A mouse click on the strip must leave focus/selection in the source app.
   # Apply NOACTIVATE before mapping, rather than after the first visible frame.
   if IS_WINDOWS:
    from passive_popup import foreign_floaters,choose_position,show_without_activation
    obstacles=foreign_floaters(u,(source['x'],source['y'])) if source else []
-   rect=self.work_area(p.winfo_x(),p.winfo_y())
-   x,y=choose_position((p.winfo_x(),p.winfo_y(),p.winfo_x()+p.winfo_width(),p.winfo_y()+p.winfo_height()),obstacles,(rect.left,rect.top,rect.right,rect.bottom))
-   p.geometry(f'{p.winfo_width()}x{p.winfo_height()}{x:+d}{y:+d}')
+   px,py,pw,ph=placed;rect=self.work_area(px,py)
+   x,y=choose_position((px,py,px+pw,py+ph),obstacles,(rect.left,rect.top,rect.right,rect.bottom))
+   p.geometry(f'{pw}x{ph}{x:+d}{y:+d}')
    before,after=show_without_activation(p,u)
    record_stage('popup_focus',unchanged=before==after,source_kept=not source or after==source['hwnd'])
   else:
@@ -761,7 +768,10 @@ class App:
   for m in re.finditer(r'(?m)^(?:英文释义|本地补充|词形变化|考试标签|常用义.*|完整分义.*)$',s):
    target.tag_add('heading',f'1.0+{m.start()}c',f'1.0+{m.end()}c')
   target.config(state='disabled');target.yview_moveto(0)
+ def mark_window_shown(self,event):
+  if event.widget is self.root:self.window_shown_at=int(time.time()*1000)
  def show(self):
+  self.window_shown_at=int(time.time()*1000)
   self.root.deiconify();self.root.lift();self.root.attributes('-topmost',True);self.root.after(400,lambda:self.root.attributes('-topmost',False))
  def lookup(self,s,accent=None,anchor=None):
   s=normalize_query(s).lower()
@@ -913,7 +923,7 @@ class App:
     elif kind=='hotkey_source':
      self.selection_version+=1;self.query_source(value,anchor=(value['x']-10,value['y']-24))
     elif kind=='mac_query_result':self.finish_mac_query(value)
-    elif kind=='mac_bridge_ready':self.native_ready=True;self.sync_mac_regions()
+    elif kind=='mac_bridge_ready':self.native_ready=True;self._sent_mac_regions=None;self.sync_mac_regions()
     elif kind=='mac_permissions':
      if value.get('accessibility') and value.get('listening'):self.permission_banner.pack_forget()
      else:
@@ -932,6 +942,7 @@ class App:
   except Exception:
    self.on_error(*sys.exc_info())
   finally:
+   if not IS_WINDOWS:self.sync_mac_regions()
    try:self.root.after(25,self.poll)
    except tk.TclError:pass
 def main():

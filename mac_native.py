@@ -25,6 +25,9 @@ class Gestures:
 
     def handle(self, raw, context):
         pid, bundle = context
+        if raw.get('outside_our_windows') and raw['type'] in ('down','right_down','middle_down') and (pid in self.own_pids or not bundle or bundle.lower() in IGNORED_BUNDLES):
+            self.start = None
+            return 'clear', dict(reason='pointer_down', at=raw['at'], pid=pid)
         if pid in self.own_pids or not bundle or bundle.lower() in IGNORED_BUNDLES:
             self.start = None
             return None
@@ -34,6 +37,7 @@ class Gestures:
         kind = raw['type']
         if kind == 'down':
             self.start = current
+            return 'clear', dict(reason='pointer_down', at=raw['at'], pid=pid)
         elif kind == 'up':
             initial, self.start = self.start, None
             dragged = bool(initial and initial['pid'] == pid and
@@ -41,6 +45,8 @@ class Gestures:
             if dragged or raw.get('clicks', 1) >= 2:
                 return 'gesture', current
             return 'clear', dict(reason='click', at=raw['at'], pid=pid)
+        elif kind in ('right_down','middle_down'):
+            return 'clear', dict(reason='pointer_down', at=raw['at'], pid=pid)
         elif kind == 'right':
             return 'clear', dict(reason='click', at=raw['at'], pid=pid)
         elif kind == 'key':
@@ -133,6 +139,7 @@ def run():
             return event
         point = Q.CGEventGetLocation(event)
         kind = {Q.kCGEventLeftMouseDown:'down', Q.kCGEventLeftMouseUp:'up',
+                Q.kCGEventRightMouseDown:'right_down', Q.kCGEventOtherMouseDown:'middle_down',
                 Q.kCGEventRightMouseUp:'right', Q.kCGEventKeyDown:'key'}.get(event_type)
         if kind:
             flags = Q.CGEventGetFlags(event)
@@ -144,6 +151,7 @@ def run():
             # its bounds at capture time, before a click can hide the toolbar.
             if over_own_window(raw, regions):
                 return event
+            raw['outside_our_windows'] = True
             try:
                 raw_events.put_nowait(raw)
             except queue.Full:
@@ -168,7 +176,7 @@ def run():
                         tap = source_ref = None
                     if not tap and (access['input_monitoring'] or access['accessibility']):
                         mask = sum(1 << int(kind) for kind in (Q.kCGEventLeftMouseDown, Q.kCGEventLeftMouseUp,
-                                                              Q.kCGEventRightMouseUp, Q.kCGEventKeyDown))
+                                                              Q.kCGEventRightMouseDown, Q.kCGEventOtherMouseDown, Q.kCGEventRightMouseUp, Q.kCGEventKeyDown))
                         tap = Q.CGEventTapCreate(Q.kCGSessionEventTap, Q.kCGHeadInsertEventTap,
                                                 Q.kCGEventTapOptionListenOnly, mask, callback, None)
                         if tap:

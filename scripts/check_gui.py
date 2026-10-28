@@ -22,6 +22,14 @@ try:
     menu_check=exercise(app)
     app.prompt('current');app.root.update()
     assert app.popup.winfo_ismapped()
+    assert app.popup.winfo_width()>=round(250*app.scale), 'Toolbar must retain its computed width while initially withdrawn'
+    assert app.popup.winfo_height()>=round(30*app.scale), 'Toolbar must remain readable after passive mapping'
+    from menu_layout_checks import descendants
+    buttons=[w for w in descendants(app.popup) if w.winfo_class()=='Button']
+    for button in buttons:
+        assert button.winfo_ismapped()
+        assert button.winfo_rootx()+button.winfo_width()<=app.popup.winfo_rootx()+app.popup.winfo_width()
+        assert button.winfo_rooty()+button.winfo_height()<=app.popup.winfo_rooty()+app.popup.winfo_height()
     app.close_floating();app.root.update()
     assert not app.popup.winfo_exists()
     from updater import Release,asset_name
