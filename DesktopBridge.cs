@@ -19,7 +19,7 @@ class DesktopBridge {
  static uint sourceClipboard;static POINT start,last;static DateTime release=DateTime.MinValue;
  static bool lastWasClick;static IntPtr lastSource=IntPtr.Zero;
  static IntPtr source=IntPtr.Zero; static uint sourcePid;static int sequence;static string pending,clearPending;
- static System.Windows.Forms.Timer debounce;static int parent;static string copyPending;
+ static System.Windows.Forms.Timer debounce;static int parent;static string copyPending,warmPending;
  [DllImport("user32.dll")]static extern uint GetClipboardSequenceNumber();
  [DllImport("user32.dll")] static extern IntPtr SetWindowsHookEx(int id,MouseProc cb,IntPtr module,uint tid);
  [DllImport("user32.dll",EntryPoint="SetWindowsHookExA")] static extern IntPtr SetKeyHook(int id,KeyProc cb,IntPtr module,uint tid);
@@ -34,6 +34,7 @@ class DesktopBridge {
  [DllImport("kernel32.dll",CharSet=CharSet.Auto)] static extern IntPtr GetModuleHandle(string name);
  [DllImport("user32.dll")] static extern bool SetProcessDpiAwarenessContext(IntPtr context);
  [DllImport("user32.dll")] static extern uint GetDoubleClickTime();
+ [DllImport("user32.dll",CharSet=CharSet.Unicode)]static extern int GetWindowTextW(IntPtr hwnd,StringBuilder text,int size);
  static void Cancel(string reason,uint pid) {
   long when=(long)(DateTime.UtcNow-new DateTime(1970,1,1)).TotalMilliseconds;
   clearPending="CLEAR|"+reason+"|"+when+"|"+pid;
@@ -44,6 +45,7 @@ class DesktopBridge {
    if(ToolbarLifecyclePolicy.IgnoreMouse(m.flags))return CallNextHookEx(hook,n,w,l);
    if(message==0x201){sourceClipboard=GetClipboardSequenceNumber();start=m.pt;source=GetAncestor(WindowFromPoint(m.pt),2);GetWindowThreadProcessId(source,out sourcePid);
     if(sourcePid!=parent)Cancel("pointer_down",sourcePid);
+    if(sourcePid!=parent)warmPending="WARM|"+sourcePid+"|"+source.ToInt64()+"|"+m.pt.X+"|"+m.pt.Y+"|"+(long)(DateTime.UtcNow-new DateTime(1970,1,1)).TotalMilliseconds;
    }
    if(message==0x205){uint target;GetWindowThreadProcessId(WindowFromPoint(m.pt),out target);if(target!=parent)Cancel("context_menu",target);}
    if(message==0x202) {
@@ -120,6 +122,10 @@ class DesktopBridge {
   if(GetForegroundWindow()!=hwnd)return false;
   uint actual;GetWindowThreadProcessId(hwnd,out actual);if(actual!=pid)return false;
   bool copying=expected!=null;
+  if(!copying) {
+   verifyReason="office_readonly";var title=new StringBuilder(1024);GetWindowTextW(hwnd,title,title.Capacity);
+   if(OfficeSelection.Current(Process.GetProcessById((int)pid).ProcessName.ToLowerInvariant(),title.ToString(),NormalizeQuery,ValidQuery))return GetForegroundWindow()==hwnd;
+  }
   verifyReason="pointer_covered";
   if(!copying&&GetAncestor(WindowFromPoint(new POINT{X=x,Y=y}),2)!=hwnd)return false;
   verifyReason="uia_point";
@@ -148,6 +154,16 @@ class DesktopBridge {
   }
   verifyReason="no_accessible_selection/"+documents.Count+"/"+inspected+"/"+rangeStatus;return false;
  }
+ static void WarmSelectionProvider(uint pid,IntPtr hwnd,int x,int y) {
+  if(GetForegroundWindow()!=hwnd)return;
+  uint actual;GetWindowThreadProcessId(hwnd,out actual);if(actual!=pid)return;
+  var element=AutomationElement.FromPoint(new System.Windows.Point(x,y));
+  for(int i=0;element!=null&&i<3;i++) {
+   if(element.Current.IsPassword)return;
+   object pattern;if(element.TryGetCurrentPattern(TextPattern.Pattern,out pattern))return;
+   element=TreeWalker.RawViewWalker.GetParent(element);
+  }
+ }
  static void VerifyServer(int owner) {
   using(var life=new System.Threading.Timer(_=>{try{if(Process.GetProcessById(owner).HasExited)Environment.Exit(0);}catch{Environment.Exit(0);}},null,1000,1000)) {
    var thread=new System.Threading.Thread(()=>{
@@ -156,6 +172,10 @@ class DesktopBridge {
     while((line=Console.ReadLine())!=null) {
      bool selected=false;
      try{var f=line.Split('|');string expected=f.Length>4&&!String.IsNullOrEmpty(f[4])?Encoding.UTF8.GetString(Convert.FromBase64String(f[4])):null;
+      if(f.Length>5&&f[5]=="W") {
+       WarmSelectionProvider(uint.Parse(f[0]),new IntPtr(long.Parse(f[1])),int.Parse(f[2]),int.Parse(f[3]));
+       Console.WriteLine("EMPTY|warm_ready");Console.Out.Flush();continue;
+      }
       selected=SelectionReady(uint.Parse(f[0]),new IntPtr(long.Parse(f[1])),int.Parse(f[2]),int.Parse(f[3]),expected);
       if(!selected){System.Threading.Thread.Sleep(75);selected=SelectionReady(uint.Parse(f[0]),new IntPtr(long.Parse(f[1])),int.Parse(f[2]),int.Parse(f[3]),expected);}
      }catch(Exception error){verifyReason=error.GetType().Name;}
@@ -200,7 +220,7 @@ class DesktopBridge {
  static void Watch(int parentId) {
   parent=parentId;
   debounce=new System.Windows.Forms.Timer();debounce.Interval=16;
-  debounce.Tick+=(s,e)=>{string copy=copyPending;copyPending=null;if(copy!=null)Console.WriteLine(copy);string clear=clearPending;clearPending=null;string message=pending;pending=null;if(clear!=null)Console.WriteLine(clear);if(message!=null)Console.WriteLine(message);if(copy!=null||clear!=null||message!=null)Console.Out.Flush();};debounce.Start();
+  debounce.Tick+=(s,e)=>{string warm=warmPending;warmPending=null;if(warm!=null)Console.WriteLine(warm);string copy=copyPending;copyPending=null;if(copy!=null)Console.WriteLine(copy);string clear=clearPending;clearPending=null;string message=pending;pending=null;if(clear!=null)Console.WriteLine(clear);if(message!=null)Console.WriteLine(message);if(warm!=null||copy!=null||clear!=null||message!=null)Console.Out.Flush();};debounce.Start();
   var life=new System.Windows.Forms.Timer();life.Interval=1500;
   life.Tick+=(s,e)=>{try {if(Process.GetProcessById(parent).HasExited)Application.Exit();}catch{Application.Exit();}};life.Start();
   hook=SetWindowsHookEx(14,mouseProc,GetModuleHandle(null),0);

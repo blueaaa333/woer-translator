@@ -56,7 +56,7 @@ class SelectionVerifier:
                 if lines.get(timeout=2)!=b'READY':raise OSError('Verifier not ready')
             if source is None:return False
             encoded=base64.b64encode(source.get('clipboard_word','').encode()).decode()
-            message='|'.join(str(source[key]) for key in ('pid','hwnd','x','y'))+'|'+encoded+'\n'
+            message='|'.join(str(source[key]) for key in ('pid','hwnd','x','y'))+'|'+encoded+'|'+('W' if source.get('_warm') else 'V')+'\n'
             server=self.server
             if server is None or self.stop.is_set():return False
             server.stdin.write(message.encode());server.stdin.flush()
@@ -68,6 +68,7 @@ class SelectionVerifier:
         except (OSError,queue.Empty,ValueError) as error:
             self.last_reason='timeout' if isinstance(error,queue.Empty) else type(error).__name__
             self.reset_server();return False
+    def prepare(self,source):self.submit(None,dict(source,_warm=True))
     def submit(self,serial,source):
         if self.stop.is_set():return
         try:self.jobs.get_nowait()
@@ -80,5 +81,5 @@ class SelectionVerifier:
             try:serial,source=self.jobs.get(timeout=.1)
             except queue.Empty:continue
             confirmed=self.windows_check(source) if sys.platform=='win32' else check_selection(self.base,source)
-            if not self.stop.is_set():self.events.put(('selection_verified',(serial,source,confirmed)))
+            if not self.stop.is_set() and not source.get('_warm'):self.events.put(('selection_verified',(serial,source,confirmed)))
     def close(self):self.stop.set();self.reset_server()

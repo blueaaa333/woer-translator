@@ -135,6 +135,13 @@ def selection_monitor_once():
    f=line.decode('utf-8-sig').strip().split('|')
    if f[0]=='READY':
     record_stage('listener_ready');continue
+   if f[0]=='WARM':
+    if selection_enabled.is_set() and len(f)==6 and all(re.fullmatch(r'-?\d+',v) for v in f[1:]):
+     pid=f[1]
+     if pid not in cache:cache[pid]=source_process(pid)
+     if cache[pid] in ('msedge','chrome','firefox','msedgewebview2'):
+      events.put(('selection_warm',dict(pid=int(f[1]),hwnd=int(f[2]),x=int(f[3]),y=int(f[4]),id=0,emitted=int(f[5]))))
+    continue
    if f[0]=='COPY':
     if len(f)==5 and all(re.fullmatch(r'-?\d+',v) for v in f[1:]):
      from copy_intent import recent_copy
@@ -456,7 +463,7 @@ class App:
      self.preferences['selection_compatibility']=True;compatibility_enabled.set()
     self.save_preferences()
    toggle('更多应用自动复制取词',lambda:self.preferences.get('all_apps_auto_copy',False),all_apps_copy_toggle)
-   tk.Label(f,text='兼容选项：会把选词写入剪贴板',bg='white',fg='#8a9aa6',font=(UI_FONT,8)).pack(anchor='w')
+   tk.Label(f,text='复制模式会改剪贴板，并可能收起原浮条',bg='white',fg='#8a9aa6',font=(UI_FONT,8)).pack(anchor='w')
   tk.Frame(f,bg='#edf1f4',height=1).pack(fill='x',pady=(10,2))
   section('发音偏好')
   def recordings_toggle():
@@ -649,7 +656,9 @@ class App:
    self.popup.destroy()
   self.selection_version+=1
   self.pending_source=source;self.last_prompt=s;self.last_prompt_time=time.monotonic()
-  p=self.popup=tk.Toplevel(self.root);p.withdraw();p.overrideredirect(True);p.attributes('-topmost',True);p.configure(bg='#dce7fb')
+  p=self.popup=tk.Toplevel(self.root);p.withdraw()
+  if IS_WINDOWS:p.attributes('-disabled',True)
+  p.overrideredirect(True);p.attributes('-topmost',True);p.configure(bg='#dce7fb')
   bar=tk.Frame(p,bg='white',padx=8,pady=5);bar.pack(fill='both',expand=True,padx=1,pady=1)
   def choose(accent=None):
    x,y=p.winfo_x(),p.winfo_y();p.withdraw()
@@ -672,8 +681,13 @@ class App:
   # A mouse click on the strip must leave focus/selection in the source app.
   # Apply NOACTIVATE before mapping, rather than after the first visible frame.
   if IS_WINDOWS:
-   hwnd=u.GetParent(p.winfo_id());ex=u.GetWindowLongW(hwnd,-20);u.SetWindowLongW(hwnd,-20,ex|0x80|0x08000000)
-   p.deiconify();p.update_idletasks();u.ShowWindow(hwnd,4)
+   from passive_popup import foreign_floaters,choose_position,show_without_activation
+   obstacles=foreign_floaters(u,(source['x'],source['y'])) if source else []
+   rect=self.work_area(p.winfo_x(),p.winfo_y())
+   x,y=choose_position((p.winfo_x(),p.winfo_y(),p.winfo_x()+p.winfo_width(),p.winfo_y()+p.winfo_height()),obstacles,(rect.left,rect.top,rect.right,rect.bottom))
+   p.geometry(f'{p.winfo_width()}x{p.winfo_height()}{x:+d}{y:+d}')
+   before,after=show_without_activation(p,u)
+   record_stage('popup_focus',unchanged=before==after,source_kept=not source or after==source['hwnd'])
   else:
    try:self.root.tk.call('::tk::unsupported::MacWindowStyle','style',p._w,'help','noActivates')
    except tk.TclError:pass
@@ -882,6 +896,7 @@ class App:
    while not events.empty() and time.monotonic()<deadline:
     kind,value=events.get_nowait()
     if kind=='clear':self.dismiss_from_input(value)
+    elif kind=='selection_warm':self.verifier.prepare(value)
     elif kind=='gesture':self.offer_selection(value)
     elif kind=='selection_verified':self.finish_selection(value)
     elif kind=='resolved':

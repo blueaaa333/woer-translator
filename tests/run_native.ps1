@@ -23,3 +23,8 @@ $browser=Join-Path $PSScriptRoot 'BrowserTextSelectionTests.exe'
 if($LASTEXITCODE -ne 0){throw 'Browser selection test compilation failed'}
 & $browser
 if($LASTEXITCODE -ne 0){throw 'Browser selection tests failed'}
+$office=Join-Path $PSScriptRoot 'OfficeSelectionTests.exe'
+& $compiler /nologo /r:Microsoft.CSharp.dll "/out:$office" (Join-Path $PSScriptRoot 'OfficeSelectionTests.cs') (Join-Path $project 'OfficeSelection.cs')
+if($LASTEXITCODE -ne 0){throw 'Office selection test compilation failed'}
+& $office
+if($LASTEXITCODE -ne 0){throw 'Office selection tests failed'}

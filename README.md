@@ -82,3 +82,7 @@ Woer Translator is a compact desktop dictionary for Windows and macOS, with sele
 ### Edge PDF 兼容选项
 
 若 Edge PDF 选词不弹出，可在“···”启用“Edge PDF 自动复制取词”。该功能默认关闭，启用后划词会执行一次 Ctrl+C，所选文字将写入剪贴板。仅确认产生新的有效源文字后显示工具条；不预先清空剪贴板。仅开启此项时只用于 Edge PDF；WPS、其他浏览器等 Windows 应用可启用“更多应用自动复制取词”。该选项也会把选词写入剪贴板，并会记住开关状态。
+
+### 保留源软件自己的工具栏
+
+若需要 WPS／浏览器原来的划词工具栏继续显示，请关闭两个自动复制兼容选项。v0.3.19 起，WPS／Office 的文字与演示优先直接读取真实文字选区，浮条不激活窗口并避让其他浮窗。未提供可访问选区的软件不能保证自动取词，可手动查询。

@@ -2,6 +2,10 @@ import queue,subprocess,unittest
 from unittest.mock import Mock,patch
 from selection_verifier import check_selection
 class SelectionVerifierTests(unittest.TestCase):
+ def test_prepare_only_queues_a_readonly_warmup(self):
+  from selection_verifier import SelectionVerifier
+  verifier=SelectionVerifier('.',queue.Queue());verifier.submit=Mock()
+  verifier.prepare(self.source());verifier.submit.assert_called_once_with(None,dict(self.source(),_warm=True))
  def test_unavailable_uia_does_not_cancel_scheduled_pdf_copy_probe(self):
   from app import App
   source=dict(self.source(),clipboard_before=3)
