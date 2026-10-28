@@ -557,6 +557,7 @@ class App:
   before=request_copy(source,u,all_apps=self.preferences.get('all_apps_auto_copy',False))
   if before is None:return
   self.clipboard_suppress_until=time.monotonic()+.7
+  owner_relations={}
   def read(attempt=0):
    if serial!=self.selection_version:return
    from selection_verifier import source_is_active
@@ -566,7 +567,12 @@ class App:
    u.GetClipboardOwner.restype=C.c_void_p;owner_pid=wintypes.DWORD()
    owner=u.GetClipboardOwner();u.GetWindowThreadProcessId(C.c_void_p(owner),C.byref(owner_pid))
    u.GetAncestor.restype=C.c_void_p;owner_root=u.GetAncestor(C.c_void_p(owner),2) if owner else None
-   if fresh_copy(source,before,sequence,owner_pid.value,owner_root):
+   confirmed=fresh_copy(source,before,sequence,owner_pid.value,owner_root)
+   if not confirmed and (before&0xffffffff)!=(sequence&0xffffffff):
+    from clipboard_family import related_owner
+    if owner_pid.value not in owner_relations:owner_relations[owner_pid.value]=related_owner(source['pid'],owner_pid.value)
+    confirmed=owner_relations[owner_pid.value]
+   if confirmed:
     value=normalize_query(clipboard())
     if valid_query(value):
      self.seq=sequence;record_stage('automatic_copy_confirmed',id=source['id'])
