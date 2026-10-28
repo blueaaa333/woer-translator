@@ -10,6 +10,14 @@ from preferences import PreferenceStore
 
 
 class PreferenceTests(unittest.TestCase):
+    def test_all_apps_copy_is_opt_in_and_remembered(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store=PreferenceStore(Path(folder)/'preferences.json')
+            self.assertFalse(store.read()['all_apps_auto_copy'])
+            store.write({'all_apps_auto_copy':True,'edge_pdf_auto_copy':True,'accent':1})
+            self.assertTrue(store.read()['all_apps_auto_copy'])
+            self.assertTrue(store.read()['edge_pdf_auto_copy'])
+            self.assertEqual(store.read()['accent'],1)
     def test_edge_pdf_copy_is_opt_in_and_persists(self):
         with tempfile.TemporaryDirectory() as folder:
             store=PreferenceStore(Path(folder)/'preferences.json')

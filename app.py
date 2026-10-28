@@ -450,6 +450,12 @@ class App:
    def pdf_copy_toggle():
     self.preferences['edge_pdf_auto_copy']=not self.preferences.get('edge_pdf_auto_copy',False);self.save_preferences()
    toggle('Edge PDF 自动复制取词',lambda:self.preferences.get('edge_pdf_auto_copy',False),pdf_copy_toggle)
+   def all_apps_copy_toggle():
+    self.preferences['all_apps_auto_copy']=not self.preferences.get('all_apps_auto_copy',False)
+    if self.preferences['all_apps_auto_copy']:
+     self.preferences['selection_compatibility']=True;compatibility_enabled.set()
+    self.save_preferences()
+   toggle('更多应用自动复制取词',lambda:self.preferences.get('all_apps_auto_copy',False),all_apps_copy_toggle)
    tk.Label(f,text='兼容选项：会把选词写入剪贴板',bg='white',fg='#8a9aa6',font=(UI_FONT,8)).pack(anchor='w')
   tk.Frame(f,bg='#edf1f4',height=1).pack(fill='x',pady=(10,2))
   section('发音偏好')
@@ -543,12 +549,12 @@ class App:
   self.verifier.submit(self.selection_version,source)
   if IS_WINDOWS and 'clipboard_before' in source:
    serial=self.selection_version;self.root.after(40,lambda:self.probe_source_copy(source,serial))
-   if not self.testing and self.preferences.get('edge_pdf_auto_copy',False):self.root.after(90,lambda:self.edge_pdf_probe(source,serial))
+   if not self.testing and (self.preferences.get('edge_pdf_auto_copy',False) or self.preferences.get('all_apps_auto_copy',False)):self.root.after(90,lambda:self.edge_pdf_probe(source,serial))
  def edge_pdf_probe(self,source,serial):
   if serial!=self.selection_version or not self.selection.get():return
   if self.popup and self.popup.winfo_exists():return
   from edge_pdf_copy import request_copy,fresh_copy
-  before=request_copy(source,u)
+  before=request_copy(source,u,all_apps=self.preferences.get('all_apps_auto_copy',False))
   if before is None:return
   self.clipboard_suppress_until=time.monotonic()+.7
   def read(attempt=0):
@@ -558,11 +564,12 @@ class App:
    sequence=u.GetClipboardSequenceNumber()
    from ctypes import wintypes
    u.GetClipboardOwner.restype=C.c_void_p;owner_pid=wintypes.DWORD()
-   u.GetWindowThreadProcessId(C.c_void_p(u.GetClipboardOwner()),C.byref(owner_pid))
-   if fresh_copy(source,before,sequence,owner_pid.value):
+   owner=u.GetClipboardOwner();u.GetWindowThreadProcessId(C.c_void_p(owner),C.byref(owner_pid))
+   u.GetAncestor.restype=C.c_void_p;owner_root=u.GetAncestor(C.c_void_p(owner),2) if owner else None
+   if fresh_copy(source,before,sequence,owner_pid.value,owner_root):
     value=normalize_query(clipboard())
     if valid_query(value):
-     self.seq=sequence;record_stage('edge_pdf_copy_confirmed',id=source['id'])
+     self.seq=sequence;record_stage('automatic_copy_confirmed',id=source['id'])
      self.close_floating('edge_pdf_copy');self.prompt('',source);return
    if attempt<25:self.root.after(15,lambda:read(attempt+1))
   self.root.after(15,read)
