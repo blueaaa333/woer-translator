@@ -261,7 +261,8 @@ class App:
   bottom=self.bottom=tk.Frame(f,bg='white');bottom.pack(fill='x')
   self.status=tk.Label(bottom,text='选中单词后，点击查词' if IS_WINDOWS else '正在准备 Mac 划词服务，可先手动查词…',bg='white',fg='#6c8692',font=(UI_FONT,8),anchor='w',width=30);self.status.pack(side='left',fill='x',expand=True)
   self.status.bind('<Button-1>',lambda event:self.audio_sources() if self.speech.last_source else None)
-  source_button=self.button(bottom,'来源 ↗',self.source_link,small=True);source_button.config(font=(UI_FONT,9),fg='#8599a5');source_button.pack(side='right')
+  self.voice_install_button=self.button(bottom,'安装英美语音',self.install_voices,small=True)
+  source_button=self.button(bottom,'词典来源 ↗',self.source_link,small=True);source_button.config(font=(UI_FONT,9),fg='#8599a5');source_button.pack(side='right')
   self.settext('选中英文，点击「查词」。\n\n完整离线释义，不调用第三方私有接口。')
   self.select_tab('definition')
   self.selection=tk.BooleanVar(value=self.preferences.get('selection',True));self.auto=tk.BooleanVar(value=self.preferences.get('copy_prompt',True))
@@ -850,17 +851,11 @@ class App:
      else:winsound.PlaySound(str(audio),winsound.SND_FILENAME)
      if serial==self.audio_serial:events.put(('status',('英式' if accent==1 else '美式')+('真人发音 · 已输出，点击查看来源' if self.speech.last_source else '合成发音 · 已输出，没声音可检查设置')))
    except Exception as exc:
-    if serial==self.audio_serial:events.put(('status',str(exc) if isinstance(exc,SpeechUnavailable) else '发音输出失败，请在···打开声音检查'))
+    if serial==self.audio_serial:events.put(('speech_unavailable' if isinstance(exc,SpeechUnavailable) and IS_WINDOWS else 'status',str(exc) if isinstance(exc,SpeechUnavailable) else '发音输出失败，请在···打开声音检查'))
   threading.Thread(target=job,daemon=True).start()
  def install_voices(self):
-  if getattr(self,'voice_installing',False):return
-  self.voice_installing=True;self.status.config(text='正在下载英美离线语音，约200 MB…')
-  def job():
-   try:
-    from scripts.setup_speech import install
-    install(DATA.resolve());events.put(('voices_installed','新英美音色已启用，可点击喇叭播放'))
-   except Exception:events.put(('voices_ready','语音下载未完成，请检查网络后重试'))
-  threading.Thread(target=job,daemon=True).start()
+  from speech_download_ui import show
+  show(self,DATA)
  def query_source_macos(self,source,accent=None,copy_only=False,anchor=None):
   version=self.selection_version
   if not copy_only:self.reset_result('正在读取本次选中的单词…')
@@ -929,6 +924,9 @@ class App:
      else:
       self.permission_banner.config(text='点击启用 Mac 划词权限 · 手动输入仍可查词');self.permission_banner.pack(before=self.card,fill='x',pady=(0,5))
     elif kind=='app_update':self.updates.receive(value)
+    elif kind=='speech_unavailable':
+     self.status.config(text='未安装语音，请点击右侧安装按钮')
+     self.voice_install_button.pack(side='right',padx=(0,6))
     elif kind=='voices_installed':
      self.audio_serial+=1
      if self.player:self.player.stop()

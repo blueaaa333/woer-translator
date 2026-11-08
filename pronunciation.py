@@ -35,15 +35,55 @@ class SpeechEngine:
         self.root=Path(user_root) if user_root else Path(base)/'speech';self.cache=Path(cache)
         if not (self.root/'voices').exists() and (Path(base)/'speech'/'voices').exists():self.root=Path(base)/'speech'
         self.recordings=Recordings(self.cache/'recordings');self.prefer_recordings=True;self.last_source=None
+        self.recording_gate=threading.Lock()
         self.processes=set();self.servers={};self.lock=threading.RLock();self.closed=threading.Event()
         atexit.register(self.close);threading.Thread(target=self.reap,daemon=True).start()
+    def cached_synthesis(self,word,accent):
+        try:
+            model,_,config,upgraded,config_hash=voice_files(self.root/'voices'/('uk' if accent==1 else 'us'),accent)
+            expected='en_GB' if accent==1 else 'en_US'
+            length_scale='1.0' if upgraded else '1.05'
+            key=f'dictionary-profile-v1|{expected}|{config_hash}|{length_scale}|{config.get("dataset")}|{model.stat().st_size}|{model.stat().st_mtime_ns}|{word.lower()}'
+            target=self.cache/(hashlib.sha256(key.encode()).hexdigest()+'.wav')
+            return target if target.exists() and self.valid_wave(target) else None
+        except (OSError,ValueError):return None
+    def quick_recording(self,word,accent):
+        try:
+            voice_files(self.root/'voices'/('uk' if accent==1 else 'us'),accent)
+            local_available=True
+        except (OSError,ValueError):local_available=False
+        if not local_available:return self.recordings.get(word,accent)
+        if not self.recording_gate.acquire(blocking=False):return None
+        done=threading.Event();result=[]
+        def fetch():
+            try:
+                worker=Recordings(self.recordings.folder)
+                audio=worker.get(word,accent)
+                if audio:result.append((audio,worker.last))
+            except Exception:pass
+            finally:
+                self.recording_gate.release();done.set()
+        threading.Thread(target=fetch,daemon=True).start()
+        done.wait(.2)
+        if done.is_set() and result:
+            audio,self.recordings.last=result[0];return audio
+        return None
     def render(self,word,accent):
         if self.closed.is_set():raise RuntimeError('Speech engine closed')
         word=normalize_query(word)
         if accent not in (1,2) or not valid_query(word):raise ValueError('Invalid speech request')
         self.last_source=None
         if self.prefer_recordings:
-            audio=self.recordings.get(word,accent)
+            audio=self.recordings.cached(word.lower(),accent)
+            if audio:
+                self.last_source=self.recordings.last
+                return audio
+        local=self.cached_synthesis(word,accent)
+        if local:return local
+        if self.prefer_recordings:
+            # Fetch on a separate bounded worker: a slow network must not hold
+            # up an installed local voice. Never queue repeated background jobs.
+            audio=self.quick_recording(word,accent)
             if self.closed.is_set():raise RuntimeError('Speech engine closed')
             if audio:
                 self.last_source=self.recordings.last

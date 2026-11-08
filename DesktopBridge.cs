@@ -86,9 +86,7 @@ class DesktopBridge {
   if(text.Length>0)return text;
   var root=AutomationElement.FromHandle(hwnd);
   text=Read(root);if(text.Length>0)return text;
-  // Browser text lives in its document provider, not necessarily the focused element.
-  var document=root.FindFirst(TreeScope.Descendants,new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Document));
-  return document==null?"":Read(document);
+  return ""; // Do not search the entire browser document tree.
  }
  static string rangeStatus="no_text_provider";
  static bool CheckSelectedRange(AutomationElement element,int x,int y,string expected) {
@@ -99,7 +97,8 @@ class DesktopBridge {
    foreach(var range in ((TextPattern)pattern).GetSelection()) {
     bool nonempty=range.CompareEndpoints(System.Windows.Automation.Text.TextPatternRangeEndpoint.Start,range,System.Windows.Automation.Text.TextPatternRangeEndpoint.End)!=0;
     if(!nonempty){rangeStatus="collapsed";continue;}
-    string text=NormalizeQuery(range.GetText(81));if(!ValidQuery(text)){rangeStatus="unsupported_text";continue;}
+    string raw=range.GetText(81);if(raw.Length>80){rangeStatus="oversized_selection";return false;}
+    string text=NormalizeQuery(raw);if(!ValidQuery(text)){rangeStatus="unsupported_text";return false;}
     rangeStatus="range_outside_pointer";
     if(expected!=null) {if(String.Equals(text,NormalizeQuery(expected),StringComparison.OrdinalIgnoreCase))return true;}
     else foreach(var rect in range.GetBoundingRectangles())if(ToolbarLifecyclePolicy.SelectionNear(new double[]{rect.X,rect.Y,rect.Width,rect.Height},x,y,true))return true;
@@ -111,6 +110,7 @@ class DesktopBridge {
   // PDF text leaves and the document provider can be separated by raw wrappers.
   for(int depth=0;element!=null&&depth<16;depth++) {
    if(CheckSelectedRange(element,x,y,expected))return true;
+   if(rangeStatus=="oversized_selection"||rangeStatus=="unsupported_text")return false;
    try {if(element.Current.IsPassword)return false;if(element.Current.NativeWindowHandle==hwnd.ToInt64())break;element=TreeWalker.RawViewWalker.GetParent(element);}
    catch(ElementNotAvailableException){break;}catch(COMException){break;}
   }
@@ -137,23 +137,16 @@ class DesktopBridge {
    var role=element.Current.ControlType;
    if(!copying&&(role==ControlType.ScrollBar||role==ControlType.Thumb||role==ControlType.Button||role==ControlType.Slider||role==ControlType.TitleBar))return false;
    if(CheckSelectionAncestors(element,hwnd,x,y,expected))return GetForegroundWindow()==hwnd;
+   if(rangeStatus=="oversized_selection"||rangeStatus=="unsupported_text"){verifyReason=rangeStatus;return false;}
   }
   // Chromium/PDF can expose IA2 text selection even when its UIA bridge has no range.
   verifyReason="ia2";
   try{if(BrowserTextSelection.AtPoint(x,y,expected,NormalizeQuery,ValidQuery))return GetForegroundWindow()==hwnd;}catch(COMException){}
-  // Chromium's PDF document is sometimes a sibling of the hit-tested surface,
-  // so walking only upward from the mouse cannot reach its TextPattern.
-  verifyReason="uia_documents";
-  var documents=root.FindAll(TreeScope.Descendants,new OrCondition(new PropertyCondition(AutomationElement.ControlTypeProperty,ControlType.Document),new PropertyCondition(AutomationElement.IsTextPatternAvailableProperty,true)));
-  int inspected=0;
-  for(int i=0;i<documents.Count&&i<512&&inspected<24;i++) {
-   var document=documents[i];
-   if(document.Current.IsOffscreen)continue;
-   if(!copying&&!document.Current.BoundingRectangle.Contains(new System.Windows.Point(x,y)))continue;
-   inspected++;
-   if(CheckSelectedRange(document,x,y,expected))return GetForegroundWindow()==hwnd;
-  }
-  verifyReason="no_accessible_selection/"+documents.Count+"/"+inspected+"/"+rangeStatus;return false;
+  // Never enumerate a browser document subtree: FindAll eagerly builds the
+  // entire accessibility tree inside the provider before a loop can limit it.
+  verifyReason="uia_root";
+  if(CheckSelectedRange(root,x,y,expected))return GetForegroundWindow()==hwnd;
+  verifyReason=rangeStatus;return false;
  }
  static void WarmSelectionProvider(uint pid,IntPtr hwnd,int x,int y) {
   if(GetForegroundWindow()!=hwnd)return;
@@ -178,7 +171,7 @@ class DesktopBridge {
        Console.WriteLine("EMPTY|warm_ready");Console.Out.Flush();continue;
       }
       selected=SelectionReady(uint.Parse(f[0]),new IntPtr(long.Parse(f[1])),int.Parse(f[2]),int.Parse(f[3]),expected);
-      if(!selected){System.Threading.Thread.Sleep(75);selected=SelectionReady(uint.Parse(f[0]),new IntPtr(long.Parse(f[1])),int.Parse(f[2]),int.Parse(f[3]),expected);}
+      if(!selected&&rangeStatus!="oversized_selection"&&rangeStatus!="unsupported_text"){System.Threading.Thread.Sleep(75);selected=SelectionReady(uint.Parse(f[0]),new IntPtr(long.Parse(f[1])),int.Parse(f[2]),int.Parse(f[3]),expected);}
      }catch(Exception error){verifyReason=error.GetType().Name;}
      Console.WriteLine((selected?"SELECTED":"EMPTY")+"|"+verifyReason);Console.Out.Flush();
     }
@@ -199,8 +192,11 @@ class DesktopBridge {
    if(e.TryGetCurrentPattern(TextPattern.Pattern,out p)) {
     var ranges=((TextPattern)p).GetSelection();
     if(ranges.Length>0) {
-     string text=NormalizeQuery(ranges[0].GetText(81));
+     string raw=ranges[0].GetText(81);
+     if(raw.Length>80)return "";
+     string text=NormalizeQuery(raw);
      if(ValidQuery(text))return text;
+     return "";
     }
    }
    e=TreeWalker.ControlViewWalker.GetParent(e);

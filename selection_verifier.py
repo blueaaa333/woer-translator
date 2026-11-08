@@ -1,5 +1,5 @@
 """Bounded, disposable accessibility checks. Never synthesize Copy to detect selection."""
-import base64,queue,subprocess,sys,threading,os
+import base64,queue,subprocess,sys,threading,os,time
 from pathlib import Path
 
 def source_is_active(source):
@@ -43,6 +43,8 @@ class SelectionVerifier:
             except (OSError,subprocess.TimeoutExpired):pass
     def windows_check(self,source=None):
         self.last_reason='starting'
+        if source and time.monotonic()<getattr(self,'blocked_until',{}).get(source['pid'],0):
+            self.last_reason='provider_cooldown';return False
         try:
             if not self.server or self.server.poll() is not None:
                 self.reset_server();lines=queue.Queue()
@@ -67,8 +69,13 @@ class SelectionVerifier:
             return status==b'SELECTED'
         except (OSError,queue.Empty,ValueError) as error:
             self.last_reason='timeout' if isinstance(error,queue.Empty) else type(error).__name__
+            if source and isinstance(error,queue.Empty):
+                if not hasattr(self,'blocked_until'):self.blocked_until={}
+                self.blocked_until[source['pid']]=time.monotonic()+15
             self.reset_server();return False
-    def prepare(self,source):self.submit(None,dict(source,_warm=True))
+    def prepare(self,source):
+        # Do not activate browser accessibility on every mouse-down/drag.
+        return
     def submit(self,serial,source):
         if self.stop.is_set():return
         try:self.jobs.get_nowait()

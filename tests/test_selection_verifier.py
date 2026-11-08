@@ -2,10 +2,10 @@ import queue,subprocess,unittest
 from unittest.mock import Mock,patch
 from selection_verifier import check_selection
 class SelectionVerifierTests(unittest.TestCase):
- def test_prepare_only_queues_a_readonly_warmup(self):
+ def test_mouse_down_does_not_call_browser_provider(self):
   from selection_verifier import SelectionVerifier
   verifier=SelectionVerifier('.',queue.Queue());verifier.submit=Mock()
-  verifier.prepare(self.source());verifier.submit.assert_called_once_with(None,dict(self.source(),_warm=True))
+  verifier.prepare(self.source());verifier.submit.assert_not_called()
  def test_unavailable_uia_does_not_cancel_scheduled_pdf_copy_probe(self):
   from app import App
   source=dict(self.source(),clipboard_before=3)
@@ -60,3 +60,13 @@ class SelectionVerifierTests(unittest.TestCase):
   fake=Mock();fake.selection_version=1;fake.pending_gesture=dict(id=1)
   with patch('selection_verifier.source_is_active',return_value=False):App.finish_selection(fake,(1,self.source(),True))
   fake.prompt.assert_not_called()
+
+ def test_timeout_cools_down_same_process_without_another_provider_call(self):
+  from selection_verifier import SelectionVerifier
+  verifier=SelectionVerifier('.',queue.Queue());verifier.server=Mock();verifier.server.poll.return_value=None;verifier.lines=Mock();verifier.lines.get.side_effect=queue.Empty
+  server=verifier.server
+  self.assertFalse(verifier.windows_check(self.source()))
+  server.kill.assert_called_once()
+  with patch('selection_verifier.subprocess.Popen') as launch:
+   self.assertFalse(verifier.windows_check(self.source()));launch.assert_not_called()
+  self.assertEqual(verifier.last_reason,'provider_cooldown')

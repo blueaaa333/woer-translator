@@ -34,10 +34,11 @@ def fetch_asset(item, destination):
         request=urllib.request.Request(item['url'],headers={'User-Agent':'WoerTranslator/0.3.6'})
         with urllib.request.urlopen(request,timeout=120) as source,destination.open('wb') as output:shutil.copyfileobj(source,output)
 
-def install(root):
+def install(root,progress=None):
     root=Path(root).resolve()
     manifest=json.loads((ROOT/'scripts'/'speech-downloads.json').read_text(encoding='utf-8'))
-    for item in manifest['files']:
+    for index,item in enumerate(manifest['files'],1):
+        if progress:progress('正在检查／下载文件 '+str(index)+'/'+str(len(manifest['files']))+'：'+Path(item['path']).name)
         target=(root/item['path']).resolve()
         if not target.is_relative_to(root):raise ValueError('Invalid destination')
         if target.exists() and hashlib.sha256(target.read_bytes()).hexdigest()==item['sha256']:continue
@@ -51,6 +52,7 @@ def install(root):
             temporary.replace(target)
         finally:
             if temporary.exists():temporary.unlink()
+    if progress:progress('文件校验完成，正在安装语音引擎…')
     destination=root/'speech'/'runtime';destination.mkdir(parents=True,exist_ok=True)
     with zipfile.ZipFile(root/'speech'/'piper_windows_amd64.zip') as archive:
         for item in archive.infolist():
