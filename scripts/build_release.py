@@ -26,6 +26,11 @@ def build(skip_installer=False):
         path=ROOT/name
         if not path.exists():raise RuntimeError('Missing resource: '+name)
         args+=['--add-data',f'{path}{os.pathsep}.']
+    ecdict_manifest=ROOT/'build'/'ecdict'/'manifest.json'
+    if not ecdict_manifest.is_file():raise RuntimeError('Missing verified ECDICT build manifest')
+    packaged_manifest=stage/'ecdict-manifest.json'
+    shutil.copy2(ecdict_manifest,packaged_manifest)
+    args+=['--add-data',f'{packaged_manifest}{os.pathsep}.']
     # Directory resources need their own destination name.
     for directory in ('assets','licenses'):
         index=args.index(f'{ROOT/directory}{os.pathsep}.');args[index]=f'{ROOT/directory}{os.pathsep}{directory}'

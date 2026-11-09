@@ -7,6 +7,7 @@
 | 原创应用代码、脚本与自编复合词 | Python、C#、脚本、compound_entries.json | MIT；根目录 LICENSE、自编词条声明 |
 | WordNet 3.0 | extended.db.gz 的英文词义、例句、词目及不规则词形 | WordNet 自带许可；保留 licenses/WordNet-LICENSE.txt，不以机构名宣传背书 |
 | Chinese Open Wordnet | extended.db.gz 中按义项对应的中文词目 | 上游自带宽松许可；保留作者署名、声明及 licenses/COW-LICENSE.txt |
+| ECDICT public CSV | 构建时从固定上游版本生成安装包内的离线英汉词库 | 上游仓库声明 MIT；保留 licenses/ECDICT-MIT.txt 和 licenses/ECDICT-NOTICE.md。README 列有历史输入来源；未逐条独立审计全部历史贡献 |
 | Wiktionary，经 Wiktextract / Kaikki 提取 | community.db.gz；extended.db.gz 的结构化词形索引 | CC BY-SA 4.0；保留逐词原页 URL、贡献者署名、改动说明和同许可。extended.db.gz 中本项目新增的数据编排按 CC BY-SA 4.0，WordNet/COW 原内容保留原许可 |
 | Lucide languages 图标 | assets/ 下 SVG、改色 PNG、ICO | ISC；保留 Lucide 完整许可及原图，声明改色、圆角背景、栅格化改动 |
 | OpenCC Python 与字典数据 | 源码依赖；安装包内置 | Apache-2.0；保留许可证与来源 NOTICE，版本 0.1.7 |
@@ -31,7 +32,7 @@
 
 ## 明确排除
 
-个人 PDF 及其提取词库、ECDICT 释义和由其导出的词形表、旧的未授权有道接口接入、他人广告或竞品商标、个人生词本、设置、剪贴板内容、语音缓存、日志、机器路径、令牌、Piper/eSpeak 预编译运行包和声音模型权重。桌面安装包只包含上表另行列明的运行组件。
+个人 PDF 及其提取词库、私人 ECDICT 混合数据库和考试标签、旧的未授权有道接口接入、他人广告或竞品商标、个人生词本、设置、剪贴板内容、语音缓存、日志、机器路径、令牌、Piper/eSpeak 预编译运行包和声音模型权重。桌面安装包只包含上表另行列明的公开资源与运行组件。
 
 这些排除并不意味着已认定相关材料侵权，而是其当前授权证据不足或与公开发行无关。
 

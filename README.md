@@ -36,21 +36,21 @@ Windows 10/11；Mac 在 macOS 15 构建检查。Mac 是首个预览版本，尚�
 .\run.ps1
 ```
 
-第一次会建立虚拟环境、安装 OpenCC、校验并解压词库、编译取词助手。要启用英美离线发音，请先阅读 [语音依赖说明](docs/SPEECH.md)，再运行：
+第一次会建立虚拟环境、安装 OpenCC、下载并校验固定版本的公开 ECDICT CSV（约 66 MB），生成离线英汉词库，再校验并解压其余词库、编译取词助手。完成后查词不需要网络。要启用英美离线发音，请先阅读 [语音依赖说明](docs/SPEECH.md)，再运行：
 
 ```powershell
 .\run.ps1 -WithSpeech
 ```
 
-这一步仅用于 Windows，从上游下载运行组件和两套模型，合计约 200 MB，需要网络；之后查词、合成语音均在本机完成。源码与安装包不附带这些第三方二进制和模型。Mac 源码运行：安装 requirements.txt、执行 scripts/prepare_data.py 后运行 python app.py。
+这一步仅用于 Windows，从上游下载运行组件和两套模型，合计约 200 MB，需要网络；之后查词、合成语音均在本机完成。源码与安装包不附带这些第三方二进制和模型。Mac 源码运行：安装 requirements.txt，先运行 `python scripts/build_ecdict.py --output build/ecdict/words.db`，再运行 `python scripts/prepare_data.py` 和 `python app.py`。
 
 保持软件运行，在支持的应用中拖选或双击英文，点击工具条中的“查词”“英”“美”或“复制”。也可主动复制单词显示工具条，或按 Windows 的 `Ctrl+Alt+D` / Mac 的 `⌘⌥D`。`×` / `Esc` 收起窗口，“··· → 退出应用”结束程序。
 
 ## 公开词库的范围
 
-公开版使用 WordNet 3.0、Chinese Open Wordnet、Wiktionary 开放文本及少量自编复合词。词库来自多个来源，记录数与去重词数不同，具体构建统计见 [data/manifest.json](data/manifest.json)。
+公开版使用固定版本的 ECDICT 英汉词库、WordNet 3.0、Chinese Open Wordnet、Wiktionary 开放文本及少量自编复合词。词库来自多个来源，记录数与去重词数不同，具体统计和 SHA-256 见 [data/manifest.json](data/manifest.json) 及构建时生成的 `build/ecdict/manifest.json`。
 
-**公开版未打包 ECDICT、个人 PDF 提取词库或个人缓存**，因此覆盖范围和个人使用版本不完全相同。不同词的释义、音标和例句完整程度取决于来源；离线语音是合成发音，不是真人逐词录音。
+公开版使用上游公开 ECDICT CSV 生成离线词库，不使用个人数据库或考试 PDF。释义覆盖和完整程度取决于上游收录；安装包包含已生成的词库，查询无需联网。音标和例句完整程度也取决于各自来源；离线语音是合成发音，不是真人逐词录音。
 
 ## 许可证与隐私
 

@@ -803,9 +803,21 @@
     }
   ],
   "excluded": [
-    "ECDICT",
+    "private ECDICT-derived data",
     "PDF-derived exam data",
     "private dictionary APIs",
     "personal caches"
-  ]
+  ],
+  "ecdict": {
+    "repository": "https://github.com/skywind3000/ECDICT",
+    "commit": "39cfb9672c0906b63569e0453c2e6abfb9ab182a",
+    "file": "ecdict.csv",
+    "source_bytes": 66009548,
+    "source_sha256": "d1ecbdf9ee2b920afb6f430ca6b6bb9f559588cf0dff86e04bd255f9390843cc",
+    "source_rows": 770611,
+    "unique_headwords": 770611,
+    "translated_rows": 770238,
+    "license": "MIT",
+    "license_notice": "licenses/ECDICT-MIT.txt; licenses/ECDICT-NOTICE.md"
+  }
 }

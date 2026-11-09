@@ -15,7 +15,9 @@ class PublicReleaseTests(unittest.TestCase):
             connection=getattr(cls.lexicon,name)
             if connection:connection.close()
     def test_private_data_excluded(self):
-        self.assertEqual(self.lexicon.db.execute('select count(*) from words').fetchone()[0],0)
+        manifest=json.loads((ROOT/'build'/'ecdict'/'manifest.json').read_text(encoding='utf-8'))
+        self.assertEqual(self.lexicon.db.execute('select count(*) from words').fetchone()[0],manifest['headwords'])
+        self.assertEqual(manifest['source_sha256'],'d1ecbdf9ee2b920afb6f430ca6b6bb9f559588cf0dff86e04bd255f9390843cc')
         self.assertIsNone(self.lexicon.exam)
         self.assertFalse((ROOT/'exam_core.db').exists())
     def test_open_data_integrity(self):

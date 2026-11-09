@@ -8,6 +8,8 @@ if(-not (Test-Path -LiteralPath '.venv/Scripts/python.exe')){
 $python=Join-Path $PSScriptRoot '.venv/Scripts/python.exe'
 & $python -m pip install -r requirements.txt
 if($LASTEXITCODE -ne 0){throw 'Installing Python dependencies failed'}
+& $python scripts/build_ecdict.py --output 'build/ecdict/words.db'
+if($LASTEXITCODE -ne 0){throw 'Building the public offline English-Chinese dictionary failed'}
 & $python scripts/prepare_data.py
 if($LASTEXITCODE -ne 0){throw 'Preparing dictionaries failed'}
 & (Join-Path $PSScriptRoot 'build_bridge.ps1')

@@ -3,6 +3,8 @@ import hashlib,json,re,sqlite3,sys
 from pathlib import Path
 REQUIRED=('IAccessible2-BSD.txt','WordNet-LICENSE.txt','COW-LICENSE.txt','CC-BY-SA-4.0.html','Wiktionary-NOTICE.md','Lucide-LICENSE.txt','OpenCC-LICENSE.txt','OpenCC-NOTICE.txt')
 NATIVE=('Python-LICENSE.txt','CPython-incorporated-software.rst','OpenSSL-LICENSE.txt','zlib-LICENSE.txt','Expat-LICENSE.txt','libmpdec-NOTICE.txt','libffi-LICENSE.txt','bzip2-LICENSE.txt','XZ-liblzma-COPYING.txt','tcl-license.terms','tk-license.terms')
+ECDICT_COMMIT='39cfb9672c0906b63569e0453c2e6abfb9ab182a'
+ECDICT_SOURCE_SHA256='d1ecbdf9ee2b920afb6f430ca6b6bb9f559588cf0dff86e04bd255f9390843cc'
 
 def audit(base):
     base=Path(base);licenses=base/'licenses';runtime=licenses/'runtime'
@@ -27,9 +29,19 @@ def audit(base):
             if path.suffix.lower() in ('.pdf','.onnx','.wav','.mp3','.ogg','.oga','.ttf','.otf','.woff','.woff2') or name in ('exam_core.db','preferences.json','生词本.txt','piper.exe'):
                 forbidden.append(str(path.relative_to(root)))
     if forbidden:raise RuntimeError('Unreviewed/private distribution files: '+', '.join(forbidden))
-    connection=sqlite3.connect((base/'words.db').resolve().as_uri()+'?mode=ro',uri=True)
+    manifest_path=base/'ecdict-manifest.json'
+    if not manifest_path.is_file():raise RuntimeError('Missing pinned ECDICT build manifest')
+    manifest=json.loads(manifest_path.read_text(encoding='utf-8'))
+    if manifest.get('source_commit')!=ECDICT_COMMIT or manifest.get('source_sha256')!=ECDICT_SOURCE_SHA256:
+        raise RuntimeError('ECDICT source pin mismatch')
+    database=base/'words.db'
+    if hashlib.sha256(database.read_bytes()).hexdigest()!=manifest.get('database_sha256'):
+        raise RuntimeError('ECDICT database hash mismatch')
+    connection=sqlite3.connect(database.resolve().as_uri()+'?mode=ro',uri=True)
     try:
-        if connection.execute('select count(*) from words').fetchone()[0]!=0:raise RuntimeError('Private dictionary entries in public compatibility database')
+        row_count=connection.execute('select count(*) from words').fetchone()[0]
+        if row_count!=manifest.get('headwords'):raise RuntimeError('ECDICT database row count mismatch')
     finally:connection.close()
-    return dict(check='distribution_notices_and_exclusions',files=count,required_notices=len(REQUIRED)+len(NATIVE),native_notice_hashes='matched',private_compatibility_entries=0,
+    return dict(check='distribution_notices_and_exclusions',files=count,required_notices=len(REQUIRED)+len(NATIVE),native_notice_hashes='matched',
+                ecdict_source_commit=ECDICT_COMMIT,ecdict_headwords=row_count,ecdict_database_hash='matched',
                 legal_scope='Automated packaging evidence only; not a non-infringement warranty')
