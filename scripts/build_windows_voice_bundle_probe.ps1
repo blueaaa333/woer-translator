@@ -35,18 +35,35 @@ foreach ($name in $crtNames) {
     }
 }
 $redistNotice = Join-Path $runtimeRoot "licenses/msvc-redist/redist.txt"
-if (-not (Test-Path -LiteralPath $redistNotice -PathType Leaf)) {
-    throw "The staged Microsoft redist file list is missing from the runtime build output"
+$redistEvidencePath = Join-Path $runtimeRoot "licenses/msvc-redist/msvc-redist-evidence.json"
+if (-not (Test-Path -LiteralPath $redistEvidencePath -PathType Leaf)) {
+    throw "The Microsoft CRT source evidence is missing from the runtime build output"
 }
-$redistNoticeHash = (Get-FileHash -LiteralPath $redistNotice -Algorithm SHA256).Hash.ToLowerInvariant()
+$redistEvidence = Get-Content -LiteralPath $redistEvidencePath -Raw | ConvertFrom-Json
+$redistNoticePresent = Test-Path -LiteralPath $redistNotice -PathType Leaf
+$redistNoticeHash = $null
+if ($redistNoticePresent) {
+    $redistNoticeHash = (Get-FileHash -LiteralPath $redistNotice -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+if ([bool]$redistEvidence.redist_txt_present_in_installation -ne [bool]$redistNoticePresent) {
+    throw "Staged redist.txt presence does not match msvc-redist-evidence.json"
+}
+if ($redistNoticeHash -and $redistEvidence.redist_txt_sha256 -and
+    $redistNoticeHash -ne [string]$redistEvidence.redist_txt_sha256) {
+    throw "Staged redist.txt hash does not match msvc-redist-evidence.json"
+}
 New-Item -ItemType Directory -Path $reportRoot -Force | Out-Null
 ([ordered]@{
     tested_only = $true
     visual_studio_redist_version = $dependency.visual_studio_redist_version
     runner_redist_directory = $crtSource
+    redist_txt_present_in_installation = [bool]$redistNoticePresent
     redist_txt_sha256 = $redistNoticeHash
     eula_source = "https://visualstudio.microsoft.com/wp-content/uploads/2021/09/Visual-C-Runtime-2015-2022-License-1.docx"
     eula_sha256 = (Get-FileHash -LiteralPath $eula -Algorithm SHA256).Hash.ToLowerInvariant()
+    visual_studio_2022_redistribution_list_url = $redistEvidence.visual_studio_2022_redistribution_list_url
+    visual_studio_2022_redistribution_list_snapshot_sha256 = $redistEvidence.visual_studio_2022_redistribution_list_snapshot_sha256
+    msvc_redist_evidence_sha256 = (Get-FileHash -LiteralPath $redistEvidencePath -Algorithm SHA256).Hash.ToLowerInvariant()
     files = $crtRecords
     redistribution_rights = "not established by this CI package probe"
 } | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $reportRoot "crt-source-inspection.json") -Encoding UTF8
