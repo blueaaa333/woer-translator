@@ -9,6 +9,14 @@ on:
       - scripts/archive_piper_sources.ps1
       - scripts/fetch_pinned_voices.py
       - scripts/voice_runtime_smoke.py
+      - pronunciation.py
+      - voice_profile.py
+      - lexicon.py
+      - recorded_audio.py
+      - chinese_text.py
+      - requirements.txt
+      - scripts/voice_bundle.py
+      - tests/test_voice_bundle.py
       - scripts/verify_piper_source_archive.py
       - scripts/preflight_voice_licenses.py
       - tests/test_source_archive.py
@@ -39,6 +47,9 @@ jobs:
           git --version
           cmake --version
           python --version
+      - name: Install declared app import dependency
+        shell: pwsh
+        run: python -m pip install --disable-pip-version-check opencc-python-reimplemented==0.1.7
       - name: Run path and packaging fixtures
         shell: pwsh
         run: |
@@ -48,7 +59,7 @@ jobs:
       - name: Discover or build
         shell: pwsh
         env:
-          MODE: ${{ github.event_name == 'push' && 'BuildRuntime' || github.event.inputs.mode || 'DiscoverOrt' }}
+          MODE: ${{ github.event_name == 'push' && 'VoiceSmoke' || github.event.inputs.mode || 'DiscoverOrt' }}
         run: ./scripts/build_piper_runtime.ps1 -Mode $env:MODE
       - name: Upload short-lived validation artifact
         if: always()
@@ -60,6 +71,7 @@ jobs:
             build/voice-runtime/speech/runtime/piper/**
             build/voice-runtime/licenses/**
             build/voice-runtime/runtime-manifest.json
+            build/voice-runtime/runtime-dependency-report.json
             build/voice-runtime/piper-runtime-source.zip
             build/voice-runtime/source-manifest.json
             build/voice-runtime/voice-smoke.json

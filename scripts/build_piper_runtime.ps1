@@ -38,6 +38,75 @@ function Build-CMake([string]$Name, [string]$Source, [string]$Install, [string[]
     Invoke-Native "cmake" @("--build",$build,"--config","Release","--target","INSTALL")
 }
 
+function Get-PeDependencies([string]$RuntimeOut, [string]$Dumpbin) {
+    $records = @()
+    foreach ($binary in (Get-ChildItem -LiteralPath $RuntimeOut -File -Recurse | Where-Object Extension -in ".exe", ".dll")) {
+        $lines = & $Dumpbin /DEPENDENTS $binary.FullName 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "dumpbin failed for $($binary.Name)" }
+        $text = $lines -join "`n"
+        $names = [regex]::Matches($text, '(?im)^\s+([A-Za-z0-9_.+-]+\.dll)\s*$') | ForEach-Object { $_.Groups[1].Value }
+        foreach ($name in ($names | Sort-Object -Unique)) {
+            $inBundle = Test-Path -LiteralPath (Join-Path $RuntimeOut $name)
+            $system = Test-Path -LiteralPath (Join-Path (Join-Path $env:SystemRoot "System32") $name)
+            $apiSet = $name -match '^(api|ext)-ms-win-'
+            $records += [ordered]@{ binary = $binary.Name; dependency = $name; bundled = $inBundle; windows_system = $system -or $apiSet }
+        }
+    }
+    return $records
+}
+
+function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
+    $installer = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio/Installer/vswhere.exe"
+    if (-not (Test-Path -LiteralPath $installer)) { throw "VS where.exe is unavailable; cannot inspect PE dependencies or locate licensed CRT redist" }
+    $vsInstall = (& $installer -latest -products '*' -property installationPath | Select-Object -First 1).Trim()
+    if (-not $vsInstall) { throw "No Visual Studio installation was found for PE dependency inspection" }
+    $toolsRoot = Join-Path $vsInstall "VC/Tools/MSVC"
+    $toolsVersion = Get-ChildItem -LiteralPath $toolsRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1
+    if (-not $toolsVersion) { throw "No MSVC tools directory was found" }
+    $dumpbin = Join-Path $toolsVersion.FullName "bin/Hostx64/x64/dumpbin.exe"
+    if (-not (Test-Path -LiteralPath $dumpbin)) { throw "dumpbin was not found at the selected MSVC tool path" }
+
+    $dependencies = @(Get-PeDependencies $RuntimeOut $dumpbin)
+    $missing = @($dependencies | Where-Object { -not $_.bundled -and -not $_.windows_system })
+    $crtMissing = @($missing | Where-Object { $_.dependency -match '^(concrt|msvcp|vcruntime|vcamp|vcomp)[0-9_]*\.dll$' } | Select-Object -ExpandProperty dependency -Unique)
+    $redistVersion = $null
+    if ($crtMissing.Count -gt 0) {
+        $redistRoot = Join-Path $vsInstall "VC/Redist/MSVC"
+        $redistVersion = Get-ChildItem -LiteralPath $redistRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1
+        if (-not $redistVersion) { throw "MSVC CRT is imported but no Visual C++ redistributable was found" }
+        $crtFolder = Join-Path $redistVersion.FullName "x64/Microsoft.VC143.CRT"
+        $redistNotice = Join-Path $redistVersion.FullName "redist.txt"
+        if (-not (Test-Path -LiteralPath $crtFolder) -or -not (Test-Path -LiteralPath $redistNotice)) {
+            throw "MSVC CRT redist or its redist.txt notice is missing"
+        }
+        Get-ChildItem -LiteralPath $crtFolder -File | Copy-Item -Destination $RuntimeOut -Force
+        $noticeDir = Join-Path $OutputRoot "licenses/msvc-redist"
+        New-Item -ItemType Directory -Path $noticeDir -Force | Out-Null
+        Copy-Item -LiteralPath $redistNotice -Destination (Join-Path $noticeDir "redist.txt") -Force
+        $dependencies = @(Get-PeDependencies $RuntimeOut $dumpbin)
+        $missing = @($dependencies | Where-Object { -not $_.bundled -and -not $_.windows_system })
+    }
+    if ($missing.Count -gt 0) {
+        $names = ($missing | ForEach-Object { "$($_.binary):$($_.dependency)" }) -join ", "
+        throw "Runtime has unresolved non-system PE imports: $names"
+    }
+    $redistFiles = @()
+    if ($crtMissing.Count -gt 0) {
+        $redistFiles = @(Get-ChildItem -LiteralPath (Join-Path $redistVersion.FullName "x64/Microsoft.VC143.CRT") -File | ForEach-Object {
+            [ordered]@{ name = $_.Name; bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
+        })
+    }
+    $redistVersionName = $null
+    if ($redistVersion) { $redistVersionName = $redistVersion.Name }
+    [ordered]@{
+        dumpbin = $dumpbin.Substring($vsInstall.Length + 1).Replace("\", "/")
+        visual_studio_redist_version = $redistVersionName
+        msvc_redist_included = ($crtMissing.Count -gt 0)
+        dependencies = $dependencies
+        msvc_redist_files = $redistFiles
+    } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $OutputRoot "runtime-dependency-report.json") -Encoding UTF8
+}
+
 if ($Mode -eq "DiscoverOrt") {
     $item = $runtime.sources | Where-Object name -eq "onnxruntime"
     New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
@@ -100,14 +169,22 @@ Build-CMake "fmt" $fmt $fmtInstall @("-DFMT_DOC=OFF","-DFMT_TEST=OFF","-DBUILD_S
 Build-CMake "spdlog" $spdlog $spdlogInstall @("-DSPDLOG_BUILD_SHARED=OFF","-DSPDLOG_INSTALL=ON","-DSPDLOG_FMT_EXTERNAL=ON","-Dfmt_DIR=$(Join-Path $fmtInstall 'lib/cmake/fmt')")
 Build-CMake "espeak-ng" $espeak $espeakInstall @("-DBUILD_SHARED_LIBS=ON","-DUSE_ASYNC=OFF","-DUSE_MBROLA=OFF","-DUSE_LIBSONIC=OFF","-DUSE_LIBPCAUDIO=OFF","-DUSE_KLATT=OFF","-DUSE_SPEECHPLAYER=OFF")
 Build-CMake "piper-phonemize" $phonemize $phonemizeInstall @("-DESPEAK_NG_DIR=$espeakInstall","-DONNXRUNTIME_DIR=$ortRoot")
-Build-CMake "piper" $piper $piperInstall @("-DFMT_DIR=$fmtInstall","-DSPDLOG_DIR=$spdlogInstall","-DPIPER_PHONEMIZE_DIR=$phonemizeInstall","-DCMAKE_CXX_FLAGS=/DSPDLOG_FMT_EXTERNAL")
+$piperCompileHook = Join-Path $work "piper-spdlog-compile-definition.cmake"
+Set-Content -LiteralPath $piperCompileHook -Value "add_compile_definitions(SPDLOG_FMT_EXTERNAL)" -Encoding ASCII
+Build-CMake "piper" $piper $piperInstall @("-DFMT_DIR=$fmtInstall","-DSPDLOG_DIR=$spdlogInstall","-DPIPER_PHONEMIZE_DIR=$phonemizeInstall","-DCMAKE_PROJECT_INCLUDE=$piperCompileHook")
 
 $runtimeOut = Join-Path $OutputRoot "speech/runtime/piper"
 New-Item -ItemType Directory -Path $runtimeOut,(Join-Path $OutputRoot "licenses/onnxruntime") -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $piperInstall "piper.exe") -Destination $runtimeOut
 Get-ChildItem -LiteralPath $piperInstall -Filter "*.dll" -File -Recurse | Copy-Item -Destination $runtimeOut
+Get-ChildItem -LiteralPath (Join-Path $ortRoot "lib") -Filter "*.dll" -File | Copy-Item -Destination $runtimeOut -Force
 Copy-Item -LiteralPath (Join-Path $piperInstall "espeak-ng-data") -Destination $runtimeOut -Recurse
-Invoke-Native (Join-Path $runtimeOut "piper.exe") @("--version")
+Resolve-PeDependencies $runtimeOut $OutputRoot
+$oldPath = $env:PATH
+try {
+    $env:PATH = "$runtimeOut;$env:SystemRoot\System32;$env:SystemRoot"
+    Invoke-Native (Join-Path $runtimeOut "piper.exe") @("--version")
+} finally { $env:PATH = $oldPath }
 Copy-Item -LiteralPath (Join-Path $ortRoot "LICENSE") -Destination (Join-Path $OutputRoot "licenses/onnxruntime/LICENSE")
 Copy-Item -LiteralPath (Join-Path $ortRoot "ThirdPartyNotices.txt") -Destination (Join-Path $OutputRoot "licenses/onnxruntime/ThirdPartyNotices.txt")
 
@@ -123,14 +200,14 @@ $files = Get-ChildItem -LiteralPath $runtimeOut -File -Recurse | ForEach-Object 
 
 if ($Mode -eq "VoiceSmoke") {
     foreach ($model in $lock.models) {
-        if ($model.license_evidence.status -ne "VERIFIED_FOR_REDISTRIBUTION") {
-            throw "Pinned model-license review gate is unset for $($model.accent)"
+        if ($model.license_evidence.status -ne "CI_TEST_LICENSE_REVIEWED") {
+            throw "Pinned model-license CI test gate is unset for $($model.accent)"
         }
     }
-    $modelRoot = Join-Path $env:GITHUB_WORKSPACE "build/voice-input"
+    $modelRoot = Join-Path $env:RUNNER_TEMP "woer-piper-voice-input"
     Invoke-Native "python" @("scripts/fetch_pinned_voices.py","--lock",$LockPath,"--dest",$modelRoot)
     Invoke-Native "python" @("scripts/voice_runtime_smoke.py","--runtime",$runtimeOut,"--models",(Join-Path $modelRoot "speech/voices"),
-        "--report",(Join-Path $OutputRoot "voice-smoke.json"))
+        "--build-root",$OutputRoot,"--lock",$LockPath,"--report",(Join-Path $OutputRoot "voice-smoke.json"))
 }
 
 Invoke-Native "powershell" @("-NoProfile","-File",(Join-Path $PSScriptRoot "archive_piper_sources.ps1"),

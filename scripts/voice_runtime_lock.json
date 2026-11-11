@@ -26,11 +26,13 @@
         }
       ],
       "license_evidence": {
-        "repo_license": "MIT metadata shown by Hugging Face at v1.0.0",
-        "model_card": "LibriVox dataset stated as public domain",
+        "repo_license": "Hugging Face root README at the locked revision declares license: mit; SHA-256 33e93643fce5180886300f9f0070eeeab8af148efb8e84361f8904def80fd9fb",
+        "model_card": "Model card states LibriVox recordings are public domain under U.S. law",
         "fixed_revision_page": "https://huggingface.co/rhasspy/piper-voices/tree/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_GB/cori/high",
         "readable_reference": "https://huggingface.co/rhasspy/piper-voices/blob/v1.0.0/en/en_GB/cori/high/MODEL_CARD",
-        "status": "REVIEW_GATE_FIXED_REVISION_LICENSE_NOT_REOPENED_BY_WEB_TOOL"
+        "status": "CI_TEST_LICENSE_REVIEWED",
+        "review_basis": "Astra decision: pinned repository MIT metadata covers weights/configuration; the model-card dataset statement is U.S.-scoped. This is a test-only gate, not a release certification.",
+        "fixed_revision_readme_sha256": "33e93643fce5180886300f9f0070eeeab8af148efb8e84361f8904def80fd9fb"
       }
     },
     {
@@ -57,11 +59,13 @@
         }
       ],
       "license_evidence": {
-        "repo_license": "MIT metadata shown by Hugging Face at v1.0.0",
-        "model_card": "LibriVox dataset stated as public domain",
+        "repo_license": "Hugging Face root README at the locked revision declares license: mit; SHA-256 33e93643fce5180886300f9f0070eeeab8af148efb8e84361f8904def80fd9fb",
+        "model_card": "Model card states LibriVox recordings are public domain under U.S. law",
         "fixed_revision_page": "https://huggingface.co/rhasspy/piper-voices/tree/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_US/kristin/medium",
         "readable_reference": "https://huggingface.co/rhasspy/piper-voices/blob/v1.0.0/en/en_US/kristin/medium/MODEL_CARD",
-        "status": "REVIEW_GATE_FIXED_REVISION_LICENSE_NOT_REOPENED_BY_WEB_TOOL"
+        "status": "CI_TEST_LICENSE_REVIEWED",
+        "review_basis": "Astra decision: pinned repository MIT metadata covers weights/configuration; the model-card dataset statement is U.S.-scoped. This is a test-only gate, not a release certification.",
+        "fixed_revision_readme_sha256": "33e93643fce5180886300f9f0070eeeab8af148efb8e84361f8904def80fd9fb"
       }
     }
   ],
