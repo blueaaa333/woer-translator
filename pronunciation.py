@@ -57,7 +57,7 @@ class SpeechEngine:
         for folder in (user_folder,bundled_folder):
             try:
                 pair=voice_files(folder,accent)
-                if not pair:raise ValueError('Voice selector returned no model pair')
+                if not pair or pair[0] is None:raise ValueError('Voice selector returned no model pair')
                 model=pair[0]
                 if model.name=='dictionary-voice.onnx' and model.stat().st_size<1_000_000:
                     raise ValueError('Managed voice model is incomplete')
@@ -210,3 +210,4 @@ class SpeechEngine:
                         proc=server['proc']
                         if proc.poll() is None:proc.terminate()
                         self.processes.discard(proc);self.servers.pop(accent,None)
+

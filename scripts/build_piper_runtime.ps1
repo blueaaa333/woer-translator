@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("DiscoverOrt", "SourceArchive", "BuildRuntime", "VoiceSmoke")]
+    [ValidateSet("DiscoverOrt", "SourceArchive", "BuildRuntime", "VoiceSmoke", "TestPeDependencyRecords")]
     [string]$Mode = "DiscoverOrt",
     [string]$LockPath = (Join-Path $PSScriptRoot "voice_runtime_lock.json"),
     [string]$SourceRoot = (Join-Path $env:RUNNER_TEMP "woer-piper-source"),
@@ -50,10 +50,23 @@ function Get-PeDependencies([string]$RuntimeOut, [string]$Dumpbin) {
             $msvcCrt = $name -match '^(concrt|msvcp|vcruntime|vcamp|vcomp)[0-9_]*\.dll$'
             $system = (Test-Path -LiteralPath (Join-Path (Join-Path $env:SystemRoot "System32") $name)) -and -not $msvcCrt
             $apiSet = $name -match '^(api|ext)-ms-win-'
-            $records += [ordered]@{ binary = $binary.Name; dependency = $name; bundled = $inBundle; windows_system = $system -or $apiSet; msvc_crt = $msvcCrt }
+            $records += [pscustomobject]@{ binary = $binary.Name; dependency = $name; bundled = $inBundle; windows_system = $system -or $apiSet; msvc_crt = $msvcCrt }
         }
     }
     return $records
+}
+
+function Get-CrtDependencyNames([object[]]$Dependencies) {
+    $names = @()
+    foreach ($record in $Dependencies) {
+        if ($null -eq $record) { throw "PE dependency record must not be null" }
+        if ($record.PSObject.Properties.Name -notcontains "dependency") {
+            throw "PE dependency record is missing its dependency property"
+        }
+        $name = [string]$record.dependency
+        if ($name -match '^(concrt|msvcp|vcruntime|vcamp|vcomp)[0-9_]*\.dll$') { $names += $name }
+    }
+    return @($names | Sort-Object -Unique)
 }
 
 function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
@@ -69,7 +82,7 @@ function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
 
     $dependencies = @(Get-PeDependencies $RuntimeOut $dumpbin)
     $missing = @($dependencies | Where-Object { -not $_.bundled -and -not $_.windows_system })
-    $crtMissing = @($missing | Where-Object { $_.dependency -match '^(concrt|msvcp|vcruntime|vcamp|vcomp)[0-9_]*\.dll$' } | Select-Object -ExpandProperty dependency -Unique)
+    $crtMissing = @(Get-CrtDependencyNames -Dependencies $missing)
     $redistVersion = $null
     if ($crtMissing.Count -gt 0) {
         $redistRoot = Join-Path $vsInstall "VC/Redist/MSVC"
@@ -80,10 +93,48 @@ function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
         if (-not (Test-Path -LiteralPath $crtFolder) -or -not (Test-Path -LiteralPath $redistNotice)) {
             throw "MSVC CRT redist or its redist.txt notice is missing"
         }
+        $eulaUrl = "https://visualstudio.microsoft.com/wp-content/uploads/2021/09/Visual-C-Runtime-2015-2022-License-1.docx"
+        $eulaPath = Join-Path $env:RUNNER_TEMP "Microsoft-Visual-C-Runtime-2015-2022-License.docx"
+        Invoke-WebRequest -Uri $eulaUrl -OutFile $eulaPath
+        if (-not (Test-Path -LiteralPath $eulaPath) -or (Get-Item -LiteralPath $eulaPath).Length -lt 10000) {
+            throw "Microsoft Visual C++ Runtime 2015-2022 license terms could not be retrieved"
+        }
+        $eulaHash = (Get-FileHash -LiteralPath $eulaPath -Algorithm SHA256).Hash.ToLowerInvariant()
         Get-ChildItem -LiteralPath $crtFolder -File | Copy-Item -Destination $RuntimeOut -Force
         $noticeDir = Join-Path $OutputRoot "licenses/msvc-redist"
         New-Item -ItemType Directory -Path $noticeDir -Force | Out-Null
         Copy-Item -LiteralPath $redistNotice -Destination (Join-Path $noticeDir "redist.txt") -Force
+        $redistNoticeHash = (Get-FileHash -LiteralPath $redistNotice -Algorithm SHA256).Hash.ToLowerInvariant()
+        $signedCrtFiles = @()
+        foreach ($crtDll in (Get-ChildItem -LiteralPath $crtFolder -Filter "*.dll" -File)) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $crtDll.FullName
+            $signer = if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { "" }
+            if ($signature.Status -ne "Valid" -or $signer -notmatch "CN=Microsoft Corporation") {
+                throw "MSVC CRT DLL lacks a valid Microsoft Authenticode signature: $($crtDll.Name) ($($signature.Status))"
+            }
+            $signedCrtFiles += [pscustomobject]@{
+                name = $crtDll.Name
+                file_version = [Diagnostics.FileVersionInfo]::GetVersionInfo($crtDll.FullName).FileVersion
+                sha256 = (Get-FileHash -LiteralPath $crtDll.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                signature_status = $signature.Status.ToString()
+                signer = $signer
+                signer_thumbprint = $signature.SignerCertificate.Thumbprint
+            }
+        }
+        if ($signedCrtFiles.Count -eq 0) { throw "The selected MSVC CRT redistributable directory contains no DLLs" }
+        $msvcLicenseEvidence = [ordered]@{
+            product = "Microsoft Visual C++ Runtime 2015-2022"
+            visual_studio_redist_version = $redistVersion.Name
+            source_directory = $crtFolder
+            redist_txt_sha256 = $redistNoticeHash
+            license_terms_url = $eulaUrl
+            license_terms_sha256 = $eulaHash
+            visual_studio_2022_redistribution_list = "https://learn.microsoft.com/visualstudio/releases/2022/redistribution"
+            visual_c_redistribution_guidance = "https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files"
+            signed_dlls = $signedCrtFiles
+            note = "Microsoft REDIST.txt is the distributable list referenced by the applicable Visual Studio license terms; it is not itself the license. These files are Microsoft redistributables, not MIT/GPL components."
+        }
+        $msvcLicenseEvidence | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $noticeDir "msvc-redist-evidence.json") -Encoding UTF8
         $dependencies = @(Get-PeDependencies $RuntimeOut $dumpbin)
         $missing = @($dependencies | Where-Object { -not $_.bundled -and -not $_.windows_system })
     }
@@ -129,6 +180,27 @@ if ($Mode -eq "DiscoverOrt") {
     $evidenceJson | Set-Content -LiteralPath (Join-Path $OutputRoot "ort-hash-evidence.json") -Encoding UTF8
     Write-Output $evidenceJson
     Write-Output "Digest evidence written; this mode does not build or trust the asset."
+    exit 0
+}
+
+if ($Mode -eq "TestPeDependencyRecords") {
+    $single = [object[]]@([pscustomobject]@{ binary = "piper.exe"; dependency = "VCRUNTIME140.dll"; bundled = $false; windows_system = $false; msvc_crt = $true })
+    $multiple = [object[]]@(
+        [pscustomobject]@{ binary = "piper.exe"; dependency = "VCRUNTIME140.dll"; bundled = $false; windows_system = $false; msvc_crt = $true },
+        [pscustomobject]@{ binary = "piper-phonemize.dll"; dependency = "MSVCP140.dll"; bundled = $false; windows_system = $false; msvc_crt = $true },
+        [pscustomobject]@{ binary = "piper.exe"; dependency = "KERNEL32.dll"; bundled = $false; windows_system = $true; msvc_crt = $false }
+    )
+    $empty = [object[]]@()
+    $singleNames = @(Get-CrtDependencyNames -Dependencies $single)
+    $multipleNames = @(Get-CrtDependencyNames -Dependencies $multiple)
+    $emptyNames = @(Get-CrtDependencyNames -Dependencies $empty)
+    if ($singleNames.Count -ne 1 -or $singleNames[0] -ne "VCRUNTIME140.dll") { throw "Single PE record fixture failed" }
+    if ($multipleNames.Count -ne 2 -or $multipleNames -notcontains "VCRUNTIME140.dll" -or $multipleNames -notcontains "MSVCP140.dll") { throw "Multiple PE record fixture failed" }
+    if ($emptyNames.Count -ne 0) { throw "Empty PE record fixture failed" }
+    $json = [ordered]@{ dependencies = @($multiple); msvc_crt_missing = $multipleNames } | ConvertTo-Json -Depth 6 -Compress
+    $roundTrip = $json | ConvertFrom-Json
+    if ($roundTrip.dependencies.Count -ne 3 -or $roundTrip.msvc_crt_missing.Count -ne 2) { throw "PE dependency JSON fixture failed" }
+    Write-Output "PE dependency record fixtures passed: single, multiple, empty, and JSON round-trip."
     exit 0
 }
 
@@ -224,3 +296,4 @@ Invoke-Native "powershell" @("-NoProfile","-File",(Join-Path $PSScriptRoot "arch
     "-LockPath",$LockPath,"-SourceRoot",$SourceRoot,"-OutputZip",(Join-Path $OutputRoot "piper-runtime-source.zip"))
 Invoke-Native "python" @("scripts/verify_piper_source_archive.py","--archive",(Join-Path $OutputRoot "piper-runtime-source.zip"),"--lock",$LockPath)
 Write-Output "Build script reached the end only after all selected gates and commands succeeded."
+

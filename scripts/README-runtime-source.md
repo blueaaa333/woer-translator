@@ -18,13 +18,26 @@ compiler's default exception, warning or runtime flags. The hook is generated
 from the archived build script and is not a separate untracked patch.
 
 The build also inspects the PE import table. If the binaries require MSVC CRT
-DLLs, the Windows validation artifact includes the files from that runner's
-Visual Studio 2022 `Microsoft.VC143.CRT` redistributable directory, its
-`redist.txt`, and a dependency report with version and per-file SHA-256 values.
-Those Microsoft redistributables are distributed under Microsoft's terms and
-are not part of this open-source source archive. The runtime is rejected if
-any non-system import remains unresolved.
+DLLs, the Windows validation artifact includes the unmodified files from that
+runner's Visual Studio 2022 `Microsoft.VC143.CRT` redistributable directory,
+its `redist.txt`, and `msvc-redist-evidence.json`. That report records the
+selected redist version and exact source directory, a SHA-256 for `redist.txt`,
+the official Microsoft Visual C++ Runtime 2015-2022 license URL and downloaded
+document hash, and the file version, SHA-256, and verified Microsoft
+Authenticode signer for each DLL.
+
+Microsoft's official [Visual Studio 2022 redistribution list](https://learn.microsoft.com/visualstudio/releases/2022/redistribution)
+states that REDIST.txt is the distributable list referenced by the applicable
+Visual Studio license terms; the list is not itself the license. The applicable
+[Visual C++ Runtime 2015-2022 license terms](https://visualstudio.microsoft.com/license-terms/vs2022-cruntime/)
+and Microsoft's [redistribution guidance](https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files)
+are recorded with the artifact. These are Microsoft redistributables, not
+MIT/GPL components. The test record does not certify the rights of any
+particular publisher. Windows API-set/system imports remain classified
+separately from bundled MSVC CRT files; the runtime is rejected if any
+non-system import remains unresolved.
 
 eSpeak NG is GPL-3.0-or-later. Any redistributed runtime must be accompanied
 by the matching source archive and notices generated with that runtime.
 This is a source/provenance record, not a non-infringement warranty.
+

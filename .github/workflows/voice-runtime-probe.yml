@@ -17,6 +17,7 @@ on:
       - requirements.txt
       - scripts/voice_bundle.py
       - tests/test_voice_bundle.py
+      - tests/test_speech_latency.py
       - scripts/verify_piper_source_archive.py
       - scripts/preflight_voice_licenses.py
       - tests/test_source_archive.py
@@ -26,7 +27,7 @@ on:
         description: Discover ORT digest, build the runtime, or run voice smoke
         required: true
         type: choice
-        options: [DiscoverOrt, SourceArchive, BuildRuntime, VoiceSmoke]
+        options: [DiscoverOrt, SourceArchive, BuildRuntime, VoiceSmoke, TestPeDependencyRecords]
         default: DiscoverOrt
 permissions:
   contents: read
@@ -47,6 +48,10 @@ jobs:
           git --version
           cmake --version
           python --version
+      - name: Verify PE dependency record handling
+        if: github.event_name == 'push' || github.event.inputs.mode == 'TestPeDependencyRecords'
+        shell: pwsh
+        run: ./scripts/build_piper_runtime.ps1 -Mode TestPeDependencyRecords
       - name: Install declared app import dependency
         shell: pwsh
         run: python -m pip install --disable-pip-version-check opencc-python-reimplemented==0.1.7
@@ -59,7 +64,7 @@ jobs:
       - name: Discover or build
         shell: pwsh
         env:
-          MODE: ${{ github.event_name == 'push' && 'VoiceSmoke' || github.event.inputs.mode || 'DiscoverOrt' }}
+          MODE: ${{ github.event_name == 'push' && 'TestPeDependencyRecords' || github.event.inputs.mode || 'DiscoverOrt' }}
         run: ./scripts/build_piper_runtime.ps1 -Mode $env:MODE
       - name: Upload short-lived validation artifact
         if: always()
@@ -95,3 +100,4 @@ jobs:
           path: build/voice-licensing/voice-license-preflight.json
           if-no-files-found: warn
           retention-days: 14
+
