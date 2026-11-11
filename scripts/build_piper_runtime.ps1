@@ -189,7 +189,13 @@ function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
         }
         $msvcLicenseEvidence | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $noticeDir "msvc-redist-evidence.json") -Encoding UTF8
         $dependencies = @(Get-PeDependencies $RuntimeOut $dumpbin)
-        $missing = @($dependencies | Where-Object { -not $_.bundled -and -not $_.windows_system -and -not $_.api_set })
+        $missing = @($dependencies | Where-Object {
+            $runnerCrtAvailable = $false
+            if ($script:RunnerMsvcCrtPath -and ($availableCrtNames -contains $_.dependency)) {
+                $runnerCrtAvailable = $true
+            }
+            -not $_.bundled -and -not $_.windows_system -and -not $_.api_set -and -not $runnerCrtAvailable
+        })
     }
     if ($missing.Count -gt 0) {
         $names = ($missing | ForEach-Object { "$($_.binary):$($_.dependency)" }) -join ", "
