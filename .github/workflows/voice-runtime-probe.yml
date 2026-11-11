@@ -11,6 +11,7 @@ on:
       - scripts/voice_runtime_smoke.py
       - scripts/verify_piper_source_archive.py
       - scripts/preflight_voice_licenses.py
+      - tests/test_source_archive.py
   workflow_dispatch:
     inputs:
       mode:
@@ -40,7 +41,7 @@ jobs:
           python --version
       - name: Run path and packaging fixtures
         shell: pwsh
-        run: python -m unittest discover -s tests -p test_voice_bundle.py -v
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
       - name: Discover or build
         shell: pwsh
         env:

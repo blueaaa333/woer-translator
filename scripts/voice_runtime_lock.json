@@ -131,7 +131,19 @@
           {
             "path": "cmake/external/onnx",
             "repository": "https://github.com/onnx/onnx.git",
-            "commit": "9b7bca2a723ff94edcd007d93b5d0cf1838591dc"
+            "commit": "9b7bca2a723ff94edcd007d93b5d0cf1838591dc",
+            "submodules": [
+              {
+                "path": "third_party/benchmark",
+                "repository": "https://github.com/google/benchmark.git",
+                "commit": "0d98dba29d66e93259db7daa53a9327df767a415"
+              },
+              {
+                "path": "third_party/pybind11",
+                "repository": "https://github.com/pybind/pybind11.git",
+                "commit": "914c06fb252b6cc3727d0eedab6736e88a3fcb01"
+              }
+            ]
           },
           {
             "path": "cmake/external/onnxruntime-extensions",
@@ -141,7 +153,19 @@
           {
             "path": "cmake/external/protobuf",
             "repository": "https://github.com/protocolbuffers/protobuf.git",
-            "commit": "a20c65f2cd549445fda907f7b83894c8eb7427d6"
+            "commit": "a20c65f2cd549445fda907f7b83894c8eb7427d6",
+            "submodules": [
+              {
+                "path": "third_party/benchmark",
+                "repository": "https://github.com/google/benchmark.git",
+                "commit": "5b7683f49e1e9223cf9927b24f6fd3d6bd82e3f8"
+              },
+              {
+                "path": "third_party/googletest",
+                "repository": "https://github.com/google/googletest.git",
+                "commit": "5ec7f0c4a113e2f18ac2c6cc7df51ad6afc24081"
+              }
+            ]
           }
         ]
       },
@@ -168,7 +192,7 @@
       "phonemize_onnxruntime": "Use only the pinned official 1.14.1 Windows x64 release archive after its SHA-256 is reviewed and filled",
       "fmt_spdlog": "Build from pinned source commits and pass their local install prefixes"
     },
-    "archive_scope": "Piper, piper-phonemize, eSpeak NG fork, fmt, spdlog, ONNX Runtime source at exact commits, and all six ORT gitlink sources with their exact commit SHAs, build scripts, lock and all notices.",
+    "archive_scope": "Piper, piper-phonemize, eSpeak NG fork, fmt, spdlog, ONNX Runtime source at exact commits, all six ORT gitlink sources, two ONNX nested gitlinks, two protobuf nested gitlinks, build scripts, lock and all notices.",
     "not_verified": [
       "A Windows compiler build of this source graph",
       "Corresponding-source completeness of the final staged runtime",

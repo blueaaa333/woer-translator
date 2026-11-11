@@ -133,7 +133,36 @@ def main():
     result = preflight(args.lock)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(json.dumps({"revision": result["revision_returned"], "repo_license": result["repo_license_metadata"], "models": [{"accent": item["accent"], "sha256": item["sha256"], "license": item["card_license"]} for item in result["models"]], "weights_fetched": False}, sort_keys=True))
+    readme = result["repo_license_text"]
+    print(json.dumps({
+        "requested_revision": result["revision_requested"],
+        "resolved_revision": result["revision_returned"],
+        "repo_license": result["repo_license_metadata"],
+        "repo_readme": {
+            "url": readme["url"],
+            "resolved_url": readme["resolved_url"],
+            "header_revision": readme["header_revision"],
+            "sha256": readme["sha256"],
+            "excerpt": readme["text"][:1500],
+        } if readme else None,
+        "license_files": [{
+            "path": item["path"],
+            "status": item["status"],
+            "bytes": item.get("bytes"),
+            "sha256": item.get("sha256"),
+            "excerpt": item.get("text", "")[:2500],
+        } for item in result["license_files"]],
+        "models": [{
+            "accent": item["accent"],
+            "resolved_url": item["resolved_url"],
+            "header_revision": item["header_revision"],
+            "sha256": item["sha256"],
+            "license": item["card_license"],
+            "card_text": item["card_text"],
+        } for item in result["models"]],
+        "weights_fetched": False,
+        "redistribution_decision": result["redistribution_decision"],
+    }, sort_keys=True))
 
 
 if __name__ == "__main__":

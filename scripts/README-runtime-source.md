@@ -2,7 +2,8 @@
 
 This archive contains source ZIPs created from all six exact top-level commits
 in voice_runtime_lock.json and separately archived, locked source for every
-gitlink in those projects (including all six ONNX Runtime gitlinks). It also
+gitlink in those projects (including six ONNX Runtime gitlinks and nested
+gitlinks in the pinned ONNX and protobuf sources). It also
 includes the build/archive scripts, a source manifest, and per-component
 license/notice files. The source archives exclude `.onnx` and `.ort`
 test/model files; the CI artifact must not contain the selected voice weights.

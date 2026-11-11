@@ -52,17 +52,94 @@ foreach ($dependency in $lock.runtime.sources) {
         if ($LASTEXITCODE -ne 0 -or $submoduleHead -ne $submodule.commit) { throw "Submodule checkout mismatch: $($submodule.path)" }
         $nestedLines = @(& git -C $submoduleRoot ls-tree -r $submodule.commit)
         if ($LASTEXITCODE -ne 0) { throw "Could not inspect nested gitlinks: $($submodule.path)" }
-        if (@($nestedLines | Where-Object { $_ -match '^160000 commit ' }).Count -gt 0) { throw "Unpinned nested gitlink: $($submodule.path)" }
-
-        $leaf = ($submodule.path -split '/')[-1]
+        $nestedGitlinks = @()
+        foreach ($line in $nestedLines) {
+            if ($line -match '^160000 commit ([0-9a-f]{40})\t(.+)$') {
+                $nestedGitlinks += [pscustomobject]@{ commit = $matches[1]; path = $matches[2] }
+            }
+        }
+        $expectedNested = @()
+        if ($null -ne $submodule.submodules) { $expectedNested = @($submodule.submodules) }
+        $nestedActualPaths = @($nestedGitlinks | ForEach-Object { $_.path } | Sort-Object)
+        $nestedExpectedPaths = @($expectedNested | ForEach-Object { $_.path } | Sort-Object)
+        if (($nestedActualPaths -join "`n") -ne ($nestedExpectedPaths -join "`n")) {
+            $details = @()
+            foreach ($link in $nestedGitlinks) {
+                $url = (& git -C $submoduleRoot config -f .gitmodules --get "submodule.$($link.path).url").Trim()
+                if ($LASTEXITCODE -ne 0) { $url = "<missing .gitmodules URL>" }
+                $details += "$($link.path)@$($link.commit) [$url]"
+            }
+            throw "Nested gitlink path set differs from lock for $($submodule.path): $($details -join '; ')"
+        }
+        $nestedGitlinkRecords = @($nestedGitlinks | ForEach-Object {
+            $link = $_
+            $pin = @($expectedNested | Where-Object { $_.path -eq $link.path })
+            if ($pin.Count -ne 1) { throw "Nested gitlink is not uniquely pinned: $($submodule.path)/$($link.path)" }
+            [ordered]@{ path = $link.path; repository = $pin[0].repository; commit = $link.commit }
+        })
+        $nestedRecords = @()
         $subArchiveDir = Join-Path $sourcesDir "onnxruntime-submodules"
         New-Item -ItemType Directory -Path $subArchiveDir -Force | Out-Null
-        $subArchiveName = "$leaf-$($submodule.commit).zip"
+        $archiveKey = ($submodule.path -replace '[\\/]', '__')
+        foreach ($nestedPin in $expectedNested) {
+            $gitlink = $nestedGitlinks | Where-Object { $_.path -eq $nestedPin.path } | Select-Object -First 1
+            if (-not $gitlink -or $gitlink.commit -ne $nestedPin.commit) { throw "Nested gitlink commit mismatch: $($submodule.path)/$($nestedPin.path)" }
+            $configKey = "submodule.$($nestedPin.path).url"
+            $configuredUrl = (& git -C $submoduleRoot config -f .gitmodules --get $configKey).Trim()
+            if ($LASTEXITCODE -ne 0 -or $configuredUrl -ne $nestedPin.repository) { throw "Nested gitlink URL mismatch: $($submodule.path)/$($nestedPin.path)" }
+            & git -C $submoduleRoot submodule update --init --depth 1 -- $nestedPin.path
+            if ($LASTEXITCODE -ne 0) { throw "Nested submodule fetch failed: $($submodule.path)/$($nestedPin.path)" }
+            $nestedRoot = Join-Path $submoduleRoot $nestedPin.path
+            $nestedHead = (& git -C $nestedRoot rev-parse HEAD).Trim()
+            if ($LASTEXITCODE -ne 0 -or $nestedHead -ne $nestedPin.commit) { throw "Nested submodule checkout mismatch: $($nestedPin.path)" }
+            $deeperLines = @(& git -C $nestedRoot ls-tree -r $nestedPin.commit)
+            if ($LASTEXITCODE -ne 0) { throw "Could not inspect deeper gitlinks: $($nestedPin.path)" }
+            $deeperGitlinks = @()
+            foreach ($line in $deeperLines) {
+                if ($line -match '^160000 commit ([0-9a-f]{40})\t(.+)$') {
+                    $deeperGitlinks += [pscustomobject]@{ commit = $matches[1]; path = $matches[2] }
+                }
+            }
+            if ($deeperGitlinks.Count -gt 0) {
+                $details = @()
+                foreach ($link in $deeperGitlinks) {
+                    $url = (& git -C $nestedRoot config -f .gitmodules --get "submodule.$($link.path).url").Trim()
+                    if ($LASTEXITCODE -ne 0) { $url = "<missing .gitmodules URL>" }
+                    $details += "$($link.path)@$($link.commit) [$url]"
+                }
+                throw "Unpinned deeper gitlinks under $($nestedPin.path): $($details -join '; ')"
+            }
+
+            $nestedKey = (($submodule.path + '/' + $nestedPin.path) -replace '[\\/]', '__')
+            $nestedArchiveName = "$nestedKey-$($nestedPin.commit).zip"
+            $nestedArchivePath = Join-Path $subArchiveDir $nestedArchiveName
+            & git -C $nestedRoot archive --format=zip --output=$nestedArchivePath $nestedPin.commit "." ":(exclude,glob)**/*.onnx" ":(exclude,glob)**/*.ort"
+            if ($LASTEXITCODE -ne 0) { throw "Nested source archive failed: $($nestedPin.path)" }
+            $nestedNoticeDir = Join-Path $noticesDir "onnxruntime-$nestedKey"
+            New-Item -ItemType Directory -Path $nestedNoticeDir -Force | Out-Null
+            $nestedLicenseFiles = @(Get-ChildItem -LiteralPath $nestedRoot -File | Where-Object { $_.Name -match '^(LICENSE|COPYING|NOTICE|ThirdPartyNotices)' })
+            if ($nestedLicenseFiles.Count -eq 0) { throw "No top-level license/notice found for nested submodule: $($nestedPin.path)" }
+            foreach ($licenseFile in $nestedLicenseFiles) { Copy-Item -LiteralPath $licenseFile.FullName -Destination $nestedNoticeDir }
+            $nestedArchiveInfo = Get-Item -LiteralPath $nestedArchivePath
+            $nestedRecords += [ordered]@{
+                path = $nestedPin.path
+                repository = $nestedPin.repository
+                commit = $nestedPin.commit
+                gitlinks = @()
+                archive = "sources/onnxruntime-submodules/$nestedArchiveName"
+                bytes = $nestedArchiveInfo.Length
+                sha256 = (Get-FileHash -LiteralPath $nestedArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+                notices = @($nestedLicenseFiles | ForEach-Object { "notices/onnxruntime-$nestedKey/$($_.Name)" })
+                excluded_model_files = @("**/*.onnx", "**/*.ort")
+                submodules = @()
+            }
+        }
+        $subArchiveName = "$archiveKey-$($submodule.commit).zip"
         $subArchivePath = Join-Path $subArchiveDir $subArchiveName
         & git -C $submoduleRoot archive --format=zip --output=$subArchivePath $submodule.commit "." ":(exclude,glob)**/*.onnx" ":(exclude,glob)**/*.ort"
         if ($LASTEXITCODE -ne 0) { throw "Submodule source archive failed: $($submodule.path)" }
 
-        $subNoticeDir = Join-Path $noticesDir "onnxruntime-$leaf"
+        $subNoticeDir = Join-Path $noticesDir "onnxruntime-$archiveKey"
         New-Item -ItemType Directory -Path $subNoticeDir -Force | Out-Null
         $subLicenseFiles = @(Get-ChildItem -LiteralPath $submoduleRoot -File | Where-Object { $_.Name -match '^(LICENSE|COPYING|NOTICE|ThirdPartyNotices)' })
         if ($subLicenseFiles.Count -eq 0) { throw "No top-level license/notice found for submodule: $($submodule.path)" }
@@ -75,9 +152,10 @@ foreach ($dependency in $lock.runtime.sources) {
             archive = "sources/onnxruntime-submodules/$subArchiveName"
             bytes = $subArchiveInfo.Length
             sha256 = (Get-FileHash -LiteralPath $subArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
-            gitlinks = @()
-            notices = @($subLicenseFiles | ForEach-Object { "notices/onnxruntime-$leaf/$($_.Name)" })
+            gitlinks = @($nestedGitlinkRecords)
+            notices = @($subLicenseFiles | ForEach-Object { "notices/onnxruntime-$archiveKey/$($_.Name)" })
             excluded_model_files = @("**/*.onnx", "**/*.ort")
+            submodules = @($nestedRecords)
         }
     }
 
@@ -126,4 +204,4 @@ if (Test-Path -LiteralPath $OutputZip) { Remove-Item -LiteralPath $OutputZip -Fo
 New-Item -ItemType Directory -Path (Split-Path -Parent $OutputZip) -Force | Out-Null
 Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $OutputZip -CompressionLevel Optimal
 Copy-Item -LiteralPath $manifestPath -Destination (Join-Path (Split-Path -Parent $OutputZip) "source-manifest.json")
-Write-Output "Archived $($sourceRecords.Count) pinned source commits; ONNX/ORT model files were excluded."
+Write-Output "Archived $($sourceRecords.Count) pinned top-level projects with locked gitlink sources; ONNX/ORT model files were excluded."
