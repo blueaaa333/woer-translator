@@ -74,7 +74,7 @@ function Find-MsvcCrtRedist([string]$VisualStudioPath) {
     if (-not (Test-Path -LiteralPath $redistRoot)) { throw "MSVC redistributable root is missing: $redistRoot" }
     $crtCandidates = @(Get-ChildItem -LiteralPath $redistRoot -Directory -Recurse |
         Where-Object { $_.Name -eq "Microsoft.VC143.CRT" -and $_.FullName -match '[\\/]x64[\\/]Microsoft\.VC143\.CRT$' } |
-        Sort-Object { [version](Split-Path (Split-Path $_.FullName -Parent) -Leaf) } -Descending)
+        Sort-Object { [version]$_.Parent.Parent.Name } -Descending)
     if ($crtCandidates.Count -eq 0) {
         $versions = @(Get-ChildItem -LiteralPath $redistRoot -Directory | Select-Object -ExpandProperty Name)
         throw "No x64 Microsoft.VC143.CRT directory exists under $redistRoot; versions=$($versions -join ', ')"
