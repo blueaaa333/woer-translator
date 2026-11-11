@@ -41,7 +41,10 @@ jobs:
           python --version
       - name: Run path and packaging fixtures
         shell: pwsh
-        run: python -m unittest discover -s tests -p 'test_*.py' -v
+        run: |
+          python -m unittest discover -s tests -p test_voice_bundle.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest discover -s tests -p test_source_archive.py -v
       - name: Discover or build
         shell: pwsh
         env:
