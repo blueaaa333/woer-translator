@@ -7,7 +7,7 @@ from scripts.collect_runtime_licenses import collect
 
 def command(*args):subprocess.run([str(x) for x in args],cwd=ROOT,check=True)
 
-def build(skip_installer=False, skip_portable=False, voice_bundle_root=None):
+def build(skip_installer=False, skip_portable=False, voice_bundle_root=None, allow_test_only_crt=False):
     version=(ROOT/'VERSION').read_text().strip()
     if sys.platform not in ('win32','darwin'):raise RuntimeError('Build on Windows or macOS')
     target='Windows' if sys.platform=='win32' else 'macOS'
@@ -24,6 +24,9 @@ def build(skip_installer=False, skip_portable=False, voice_bundle_root=None):
         bundle_root=Path(voice_bundle_root).resolve()
         voice_report=audit_embedded_voice_payload(bundle_root)
         if not voice_report:raise RuntimeError('Incomplete locked voice bundle')
+        package_manifest=json.loads((bundle_root/'licenses'/'speech'/'package-manifest.json').read_text(encoding='utf-8'))
+        if package_manifest.get('crt',{}).get('test_only') and not allow_test_only_crt:
+            raise RuntimeError('Runner CRT payload is test-only; release build requires separate redistribution approval')
         voice_bundle_stage=stage/'speech'
         voice_license_stage=stage/'speech-licenses'
         if voice_bundle_stage.exists():shutil.rmtree(voice_bundle_stage)
@@ -109,5 +112,5 @@ def build(skip_installer=False, skip_portable=False, voice_bundle_root=None):
         command(sys.executable,ROOT/'scripts'/'check_mac_update.py',out/f'WoerTranslator-{version}-macOS-{arch}.dmg')
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--skip-installer',action='store_true');parser.add_argument('--skip-portable',action='store_true');parser.add_argument('--voice-bundle-root',type=Path)
-    args=parser.parse_args();build(args.skip_installer,args.skip_portable,args.voice_bundle_root)
+    parser=argparse.ArgumentParser();parser.add_argument('--skip-installer',action='store_true');parser.add_argument('--skip-portable',action='store_true');parser.add_argument('--voice-bundle-root',type=Path);parser.add_argument('--allow-test-only-crt',action='store_true',help='test only: permit runner CRT in a non-release probe package')
+    args=parser.parse_args();build(args.skip_installer,args.skip_portable,args.voice_bundle_root,args.allow_test_only_crt)
