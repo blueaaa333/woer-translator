@@ -1,0 +1,123 @@
+param(
+    [ValidateSet("DiscoverOrt", "BuildRuntime", "VoiceSmoke")]
+    [string]$Mode = "DiscoverOrt",
+    [string]$LockPath = (Join-Path $PSScriptRoot "voice_runtime_lock.json"),
+    [string]$SourceRoot = (Join-Path $env:RUNNER_TEMP "woer-piper-source"),
+    [string]$OutputRoot = (Join-Path $env:GITHUB_WORKSPACE "build/voice-runtime")
+)
+
+$ErrorActionPreference = "Stop"
+$lock = Get-Content -LiteralPath $LockPath -Raw | ConvertFrom-Json
+$runtime = $lock.runtime
+$work = Join-Path $env:RUNNER_TEMP "woer-piper-build"
+
+function Invoke-Native([string]$File, [string[]]$Arguments) {
+    & $File @Arguments
+    if ($LASTEXITCODE -ne 0) { throw "$File exited with code $LASTEXITCODE" }
+}
+
+function Get-Source([string]$Name) {
+    $items = @($runtime.sources | Where-Object name -eq $Name)
+    if ($items.Count -ne 1) { throw "Expected one locked source for $Name" }
+    $item = $items[0]
+    $directory = Join-Path $SourceRoot $Name
+    if (-not (Test-Path -LiteralPath $directory)) {
+        Invoke-Native "git" @("clone", "--no-checkout", $item.repository, $directory)
+    }
+    Invoke-Native "git" @("-C", $directory, "fetch", "--depth", "1", "origin", $item.commit)
+    Invoke-Native "git" @("-C", $directory, "checkout", "--detach", "FETCH_HEAD")
+    $actual = (& git -C $directory rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or $actual -ne $item.commit) { throw "Commit mismatch for $Name" }
+    return $directory
+}
+
+function Build-CMake([string]$Name, [string]$Source, [string]$Install, [string[]]$Extra) {
+    $build = Join-Path $work $Name
+    $args = @("-S",$Source,"-B",$build,"-G","Visual Studio 17 2022","-A","x64","-DCMAKE_INSTALL_PREFIX=$Install") + $Extra
+    Invoke-Native "cmake" $args
+    Invoke-Native "cmake" @("--build",$build,"--config","Release","--target","INSTALL")
+}
+
+if ($Mode -eq "DiscoverOrt") {
+    $item = $runtime.sources | Where-Object name -eq "onnxruntime"
+    New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
+    New-Item -ItemType Directory -Path $work -Force | Out-Null
+    $zip = Join-Path $work "onnxruntime-win-x64-1.14.1.zip"
+    Invoke-WebRequest -Uri $item.windows_binary_url -OutFile $zip
+    $evidence = [ordered]@{
+        url = $item.windows_binary_url
+        bytes = (Get-Item -LiteralPath $zip).Length
+        sha256 = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+        upstream_digest = $null
+        source_commit = $item.commit
+        review = "Observed over HTTPS; human review required before the value is copied into the lock."
+    }
+    $evidence | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $OutputRoot "ort-hash-evidence.json") -Encoding UTF8
+    Write-Output "Digest evidence written; this mode does not build or trust the asset."
+    exit 0
+}
+
+$ortItem = $runtime.sources | Where-Object name -eq "onnxruntime"
+if (-not $ortItem.windows_binary_sha256 -or $ortItem.windows_binary_sha256 -notmatch "^[a-f0-9]{64}$") {
+    throw "ORT SHA-256 review gate is unset. Run DiscoverOrt, review it, update the lock, then rerun."
+}
+New-Item -ItemType Directory -Path $SourceRoot,$work,$OutputRoot | Out-Null
+$piper = Get-Source "piper"
+$phonemize = Get-Source "piper-phonemize"
+$espeak = Get-Source "espeak-ng"
+$fmt = Get-Source "fmt"
+$spdlog = Get-Source "spdlog"
+
+$ortZip = Join-Path $work "onnxruntime-win-x64-1.14.1.zip"
+Invoke-WebRequest -Uri $ortItem.windows_binary_url -OutFile $ortZip
+$actualHash = (Get-FileHash -LiteralPath $ortZip -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actualHash -ne $ortItem.windows_binary_sha256) { throw "ORT SHA-256 mismatch: $actualHash" }
+$ortRoot = Join-Path $work "onnxruntime-win-x64-1.14.1"
+Expand-Archive -LiteralPath $ortZip -DestinationPath $work -Force
+if (-not (Test-Path -LiteralPath (Join-Path $ortRoot "include/onnxruntime_c_api.h"))) { throw "Unexpected ORT archive layout" }
+
+$install = Join-Path $work "install"
+$fmtInstall = Join-Path $install "fmt"
+$spdlogInstall = Join-Path $install "spdlog"
+$espeakInstall = Join-Path $install "espeak-ng"
+$phonemizeInstall = Join-Path $install "piper-phonemize"
+$piperInstall = Join-Path $install "piper"
+Build-CMake "fmt" $fmt $fmtInstall @("-DFMT_DOC=OFF","-DFMT_TEST=OFF","-DBUILD_SHARED_LIBS=OFF")
+Build-CMake "spdlog" $spdlog $spdlogInstall @("-DSPDLOG_BUILD_SHARED=OFF","-DSPDLOG_INSTALL=ON","-DSPDLOG_FMT_EXTERNAL=ON","-DFMT_DIR=$(Join-Path $fmtInstall 'lib/cmake/fmt')")
+Build-CMake "espeak-ng" $espeak $espeakInstall @("-DBUILD_SHARED_LIBS=ON","-DUSE_ASYNC=OFF","-DUSE_MBROLA=OFF","-DUSE_LIBSONIC=OFF","-DUSE_LIBPCAUDIO=OFF","-DUSE_KLATT=OFF","-DUSE_SPEECHPLAYER=OFF")
+Build-CMake "piper-phonemize" $phonemize $phonemizeInstall @("-DESPEAK_NG_DIR=$espeakInstall","-DONNXRUNTIME_DIR=$ortRoot")
+Build-CMake "piper" $piper $piperInstall @("-DFMT_DIR=$fmtInstall","-DSPDLOG_DIR=$spdlogInstall","-DPIPER_PHONEMIZE_DIR=$phonemizeInstall")
+
+$runtimeOut = Join-Path $OutputRoot "speech/runtime/piper"
+New-Item -ItemType Directory -Path $runtimeOut,(Join-Path $OutputRoot "licenses/onnxruntime") -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $piperInstall "piper.exe") -Destination $runtimeOut
+Get-ChildItem -LiteralPath $piperInstall -Filter "*.dll" -File -Recurse | Copy-Item -Destination $runtimeOut
+Copy-Item -LiteralPath (Join-Path $piperInstall "espeak-ng-data") -Destination $runtimeOut -Recurse
+Copy-Item -LiteralPath (Join-Path $ortRoot "LICENSE") -Destination (Join-Path $OutputRoot "licenses/onnxruntime/LICENSE")
+Copy-Item -LiteralPath (Join-Path $ortRoot "ThirdPartyNotices.txt") -Destination (Join-Path $OutputRoot "licenses/onnxruntime/ThirdPartyNotices.txt")
+
+$files = Get-ChildItem -LiteralPath $runtimeOut -File -Recurse | ForEach-Object {
+    [ordered]@{
+        path = $_.FullName.Substring($OutputRoot.Length + 1).Replace("\","/")
+        bytes = $_.Length
+        sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+}
+[ordered]@{ files = @($files); profile = $lock.profile } |
+    ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $OutputRoot "runtime-manifest.json") -Encoding UTF8
+
+if ($Mode -eq "VoiceSmoke") {
+    foreach ($model in $lock.models) {
+        if ($model.license_evidence.status -ne "VERIFIED_FOR_REDISTRIBUTION") {
+            throw "Pinned model-license review gate is unset for $($model.accent)"
+        }
+    }
+    $modelRoot = Join-Path $env:GITHUB_WORKSPACE "build/voice-input"
+    Invoke-Native "python" @("scripts/fetch_pinned_voices.py","--lock",$LockPath,"--dest",$modelRoot)
+    Invoke-Native "python" @("scripts/voice_runtime_smoke.py","--runtime",$runtimeOut,"--models",(Join-Path $modelRoot "speech/voices"),
+        "--report",(Join-Path $OutputRoot "voice-smoke.json"))
+}
+
+Invoke-Native "powershell" @("-NoProfile","-File",(Join-Path $PSScriptRoot "archive_piper_sources.ps1"),
+    "-LockPath",$LockPath,"-SourceRoot",$SourceRoot,"-OutputZip",(Join-Path $OutputRoot "piper-runtime-source.zip"))
+Write-Output "Build script reached the end only after all selected gates and commands succeeded."
