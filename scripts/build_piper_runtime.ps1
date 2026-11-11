@@ -147,8 +147,9 @@ function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
         foreach ($crtDll in (Get-ChildItem -LiteralPath $crtFolder -Filter "*.dll" -File)) {
             $signature = Get-AuthenticodeSignature -LiteralPath $crtDll.FullName
             $signer = if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { "" }
-            if ($signature.Status -ne "Valid" -or $signer -notmatch "CN=Microsoft Corporation") {
-                throw "MSVC CRT DLL lacks a valid Microsoft Authenticode signature: $($crtDll.Name) ($($signature.Status))"
+            $microsoftSigner = $signer -match '(?i)(?:^|,\s*)(?:CN|O)=Microsoft Corporation(?:,|$)'
+            if ($signature.Status -ne "Valid" -or -not $microsoftSigner) {
+                throw "MSVC CRT DLL lacks a valid Microsoft Authenticode signature: $($crtDll.Name) ($($signature.Status)); signer=$signer"
             }
             $signedCrtFiles += [pscustomobject]@{
                 name = $crtDll.Name
@@ -268,6 +269,13 @@ if ($Mode -eq "TestMsvcRedistDiscovery") {
     $redist = Find-MsvcCrtRedist $vsInstall
         $noticeState = if ($redist.redist_notice) { $redist.redist_notice } else { "not-installed; use the official Microsoft redistribution-list source" }
         Write-Output "MSVC CRT discovery passed; visual_studio=$vsInstall; redist_version=$($redist.version.Name); crt_folder=$($redist.crt_folder); redist_txt=$noticeState"
+    foreach ($crtDll in (Get-ChildItem -LiteralPath $redist.crt_folder -Filter "*.dll" -File)) {
+        $signature = Get-AuthenticodeSignature -LiteralPath $crtDll.FullName
+        $signer = if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { "" }
+        $fileVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($crtDll.FullName).FileVersion
+        $hash = (Get-FileHash -LiteralPath $crtDll.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        Write-Output "CRT signer probe: name=$($crtDll.Name); version=$fileVersion; signature=$($signature.Status); signer=$signer; sha256=$hash"
+    }
     exit 0
 }
 
