@@ -80,6 +80,7 @@ $phonemize = Get-Source "piper-phonemize"
 $espeak = Get-Source "espeak-ng"
 $fmt = Get-Source "fmt"
 $spdlog = Get-Source "spdlog"
+[void](Get-Source "onnxruntime") # Corresponding source for the pinned runtime binary and its license bundle.
 
 $ortZip = Join-Path $work "onnxruntime-win-x64-1.14.1.zip"
 Invoke-WebRequest -Uri $ortItem.windows_binary_url -OutFile $ortZip
@@ -106,6 +107,7 @@ New-Item -ItemType Directory -Path $runtimeOut,(Join-Path $OutputRoot "licenses/
 Copy-Item -LiteralPath (Join-Path $piperInstall "piper.exe") -Destination $runtimeOut
 Get-ChildItem -LiteralPath $piperInstall -Filter "*.dll" -File -Recurse | Copy-Item -Destination $runtimeOut
 Copy-Item -LiteralPath (Join-Path $piperInstall "espeak-ng-data") -Destination $runtimeOut -Recurse
+Invoke-Native (Join-Path $runtimeOut "piper.exe") @("--version")
 Copy-Item -LiteralPath (Join-Path $ortRoot "LICENSE") -Destination (Join-Path $OutputRoot "licenses/onnxruntime/LICENSE")
 Copy-Item -LiteralPath (Join-Path $ortRoot "ThirdPartyNotices.txt") -Destination (Join-Path $OutputRoot "licenses/onnxruntime/ThirdPartyNotices.txt")
 
