@@ -131,7 +131,7 @@ class SourceArchiveTests(unittest.TestCase):
     def test_verifies_recursive_pins_archives_and_notices(self):
         temporary, archive_path, lock_path = self.make_fixture()
         with temporary:
-            report = verify(archive_path, lock_path)
+            report = verify(str(archive_path), str(lock_path))
         ort = next(item for item in report["verified_sources"] if item["path"] == "onnxruntime")
         self.assertEqual(len(ort["submodules"]), 1)
         self.assertEqual(len(ort["submodules"][0]["submodules"]), 2)

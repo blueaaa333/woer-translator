@@ -4,7 +4,7 @@ import hashlib
 import io
 import json
 import zipfile
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 
 WEIGHT_SUFFIXES = {".onnx", ".ort"}
@@ -105,7 +105,7 @@ def _verify_source_node(bundle, names, record, pin, label, require_ort_notices=F
 
 
 def verify(archive_path, lock_path):
-    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    lock = json.loads(Path(lock_path).read_text(encoding="utf-8"))
     expected = {item["name"]: item for item in lock["runtime"]["sources"]}
     if len(expected) != 6:
         raise ValueError(f"Expected six pinned sources, found {len(expected)}")
