@@ -7,7 +7,7 @@ from scripts.collect_runtime_licenses import collect
 
 def command(*args):subprocess.run([str(x) for x in args],cwd=ROOT,check=True)
 
-def build(skip_installer=False):
+def build(skip_installer=False, skip_portable=False, voice_bundle_root=None):
     version=(ROOT/'VERSION').read_text().strip()
     if sys.platform not in ('win32','darwin'):raise RuntimeError('Build on Windows or macOS')
     target='Windows' if sys.platform=='win32' else 'macOS'
@@ -16,6 +16,22 @@ def build(skip_installer=False):
     stage=ROOT/'build'/'release-resources';stage.mkdir(parents=True,exist_ok=True)
     versions=collect(stage/'runtime-licenses')
     (stage/'build-info.json').write_text(json.dumps(dict(version=version,platform=target,arch=arch,runtime=versions),indent=2),encoding='utf-8')
+    voice_bundle_stage=None
+    voice_license_stage=None
+    if voice_bundle_root is not None:
+        if sys.platform!='win32':raise RuntimeError('Preinstalled Piper resources are Windows-only')
+        from scripts.prepare_voice_bundle import audit_embedded_voice_payload
+        bundle_root=Path(voice_bundle_root).resolve()
+        voice_report=audit_embedded_voice_payload(bundle_root)
+        if not voice_report:raise RuntimeError('Incomplete locked voice bundle')
+        voice_bundle_stage=stage/'speech'
+        voice_license_stage=stage/'speech-licenses'
+        if voice_bundle_stage.exists():shutil.rmtree(voice_bundle_stage)
+        if voice_license_stage.exists():shutil.rmtree(voice_license_stage)
+        shutil.copytree(bundle_root/'speech',voice_bundle_stage)
+        shutil.copytree(bundle_root/'licenses'/'speech',voice_license_stage)
+        (stage/'speech-bundle-build-report.json').write_text(
+            json.dumps(voice_report,indent=2,sort_keys=True)+'\\n',encoding='utf-8')
     if sys.platform=='win32':command('powershell','-NoProfile','-File','build_bridge.ps1')
     from PIL import Image
     icon=ROOT/'assets'/'沃尔翻译官.ico'
@@ -38,6 +54,10 @@ def build(skip_installer=False):
            '--add-data',f'{ROOT/"docs"/"MAC_FIRST_RUN.html"}{os.pathsep}docs',
            '--add-data',f'{ROOT/"scripts"/"speech-downloads.json"}{os.pathsep}scripts','--hidden-import','scripts.setup_speech',
            '--hidden-import','scripts.check_runtime']
+    if voice_bundle_stage is not None:
+        args+=['--add-data',f'{voice_bundle_stage}{os.pathsep}speech',
+               '--add-data',f'{voice_license_stage}{os.pathsep}licenses/speech',
+               '--hidden-import','scripts.prepare_voice_bundle']
     if sys.platform=='win32':args+=['--manifest',str(ROOT/'QingCi.manifest'),'--add-binary',f'{ROOT/"DesktopBridge.exe"}{os.pathsep}.']
     else:args+=['--osx-bundle-identifier','io.github.blueaaa333.woer-translator','--hidden-import','mac_platform','--hidden-import','ApplicationServices','--hidden-import','Quartz','--hidden-import','AppKit']
     args+=[str(ROOT/'app.py')];command(*args)
@@ -63,7 +83,7 @@ def build(skip_installer=False):
         if 'error' in runtime:raise RuntimeError('Frozen macOS UI check failed: '+str(runtime))
         shutil.copy2(runtime_report,out/f'WoerTranslator-{version}-{target}-{arch}-runtime.json')
     if sys.platform=='win32':
-        shutil.make_archive(str(out/f'WoerTranslator-{version}-Windows-x64-Portable'),'zip',ROOT/'dist','WoerTranslator')
+        if not skip_portable:shutil.make_archive(str(out/f'WoerTranslator-{version}-Windows-x64-Portable'),'zip',ROOT/'dist','WoerTranslator')
         if not skip_installer:
             compiler=Path(os.environ.get('ProgramFiles(x86)',r'C:\Program Files (x86)'))/'Inno Setup 6'/'ISCC.exe'
             if not compiler.exists():raise RuntimeError('Install Inno Setup 6 from its official source first')
@@ -89,5 +109,5 @@ def build(skip_installer=False):
         command(sys.executable,ROOT/'scripts'/'check_mac_update.py',out/f'WoerTranslator-{version}-macOS-{arch}.dmg')
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--skip-installer',action='store_true')
-    build(parser.parse_args().skip_installer)
+    parser=argparse.ArgumentParser();parser.add_argument('--skip-installer',action='store_true');parser.add_argument('--skip-portable',action='store_true');parser.add_argument('--voice-bundle-root',type=Path)
+    args=parser.parse_args();build(args.skip_installer,args.skip_portable,args.voice_bundle_root)
