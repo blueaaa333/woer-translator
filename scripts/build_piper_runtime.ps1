@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("DiscoverOrt", "BuildRuntime", "VoiceSmoke")]
+    [ValidateSet("DiscoverOrt", "SourceArchive", "BuildRuntime", "VoiceSmoke")]
     [string]$Mode = "DiscoverOrt",
     [string]$LockPath = (Join-Path $PSScriptRoot "voice_runtime_lock.json"),
     [string]$SourceRoot = (Join-Path $env:RUNNER_TEMP "woer-piper-source"),
@@ -22,7 +22,7 @@ function Get-Source([string]$Name) {
     $item = $items[0]
     $directory = Join-Path $SourceRoot $Name
     if (-not (Test-Path -LiteralPath $directory)) {
-        Invoke-Native "git" @("clone", "--no-checkout", $item.repository, $directory)
+        Invoke-Native "git" @("clone", "--filter=blob:none", "--no-checkout", "--depth", "1", $item.repository, $directory)
     }
     Invoke-Native "git" @("-C", $directory, "fetch", "--depth", "1", "origin", $item.commit)
     Invoke-Native "git" @("-C", $directory, "checkout", "--detach", "FETCH_HEAD")
@@ -56,6 +56,17 @@ if ($Mode -eq "DiscoverOrt") {
     $evidenceJson | Set-Content -LiteralPath (Join-Path $OutputRoot "ort-hash-evidence.json") -Encoding UTF8
     Write-Output $evidenceJson
     Write-Output "Digest evidence written; this mode does not build or trust the asset."
+    exit 0
+}
+
+if ($Mode -eq "SourceArchive") {
+    New-Item -ItemType Directory -Path $SourceRoot,$work,$OutputRoot -Force | Out-Null
+    foreach ($dependency in $runtime.sources) { [void](Get-Source $dependency.name) }
+    $sourceArchive = Join-Path $OutputRoot "piper-runtime-source.zip"
+    Invoke-Native "powershell" @("-NoProfile","-File",(Join-Path $PSScriptRoot "archive_piper_sources.ps1"),
+        "-LockPath",$LockPath,"-SourceRoot",$SourceRoot,"-OutputZip",$sourceArchive)
+    Invoke-Native "python" @("scripts/verify_piper_source_archive.py","--archive",$sourceArchive,"--lock",$LockPath)
+    Write-Output "All six pinned source commits were archived and verified; model weights are excluded."
     exit 0
 }
 
@@ -122,4 +133,5 @@ if ($Mode -eq "VoiceSmoke") {
 
 Invoke-Native "powershell" @("-NoProfile","-File",(Join-Path $PSScriptRoot "archive_piper_sources.ps1"),
     "-LockPath",$LockPath,"-SourceRoot",$SourceRoot,"-OutputZip",(Join-Path $OutputRoot "piper-runtime-source.zip"))
+Invoke-Native "python" @("scripts/verify_piper_source_archive.py","--archive",(Join-Path $OutputRoot "piper-runtime-source.zip"),"--lock",$LockPath)
 Write-Output "Build script reached the end only after all selected gates and commands succeeded."

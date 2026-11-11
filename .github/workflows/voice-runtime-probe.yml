@@ -9,13 +9,15 @@ on:
       - scripts/archive_piper_sources.ps1
       - scripts/fetch_pinned_voices.py
       - scripts/voice_runtime_smoke.py
+      - scripts/verify_piper_source_archive.py
+      - scripts/preflight_voice_licenses.py
   workflow_dispatch:
     inputs:
       mode:
         description: Discover ORT digest, build the runtime, or run voice smoke
         required: true
         type: choice
-        options: [DiscoverOrt, BuildRuntime, VoiceSmoke]
+        options: [DiscoverOrt, SourceArchive, BuildRuntime, VoiceSmoke]
         default: DiscoverOrt
 permissions:
   contents: read
@@ -42,7 +44,7 @@ jobs:
       - name: Discover or build
         shell: pwsh
         env:
-          MODE: ${{ github.event.inputs.mode || 'DiscoverOrt' }}
+          MODE: ${{ github.event_name == 'push' && 'SourceArchive' || github.event.inputs.mode || 'DiscoverOrt' }}
         run: ./scripts/build_piper_runtime.ps1 -Mode $env:MODE
       - name: Upload short-lived validation artifact
         if: always()
@@ -55,6 +57,25 @@ jobs:
             build/voice-runtime/licenses/**
             build/voice-runtime/runtime-manifest.json
             build/voice-runtime/piper-runtime-source.zip
+            build/voice-runtime/source-manifest.json
             build/voice-runtime/voice-smoke.json
+          if-no-files-found: warn
+          retention-days: 14
+  voice-license-metadata:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.ref }}
+      - name: Read fixed-revision metadata and model cards only
+        shell: pwsh
+        run: python scripts/preflight_voice_licenses.py --lock scripts/voice_runtime_lock.json --report build/voice-licensing/voice-license-preflight.json
+      - name: Upload text-only license evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: voice-license-preflight-${{ github.run_id }}
+          path: build/voice-licensing/voice-license-preflight.json
           if-no-files-found: warn
           retention-days: 14
