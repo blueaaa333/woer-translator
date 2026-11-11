@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("DiscoverOrt", "SourceArchive", "BuildRuntime", "VoiceSmoke", "TestPeDependencyRecords")]
+    [ValidateSet("DiscoverOrt", "SourceArchive", "BuildRuntime", "VoiceSmoke", "TestPeDependencyRecords", "TestMsvcRedistDiscovery")]
     [string]$Mode = "DiscoverOrt",
     [string]$LockPath = (Join-Path $PSScriptRoot "voice_runtime_lock.json"),
     [string]$SourceRoot = (Join-Path $env:RUNNER_TEMP "woer-piper-source"),
@@ -69,6 +69,34 @@ function Get-CrtDependencyNames([object[]]$Dependencies) {
     return @($names | Sort-Object -Unique)
 }
 
+function Find-MsvcCrtRedist([string]$VisualStudioPath) {
+    $redistRoot = Join-Path $VisualStudioPath "VC/Redist/MSVC"
+    if (-not (Test-Path -LiteralPath $redistRoot)) { throw "MSVC redistributable root is missing: $redistRoot" }
+    $crtCandidates = @(Get-ChildItem -LiteralPath $redistRoot -Directory -Recurse |
+        Where-Object { $_.Name -eq "Microsoft.VC143.CRT" -and $_.FullName -match '[\\/]x64[\\/]Microsoft\.VC143\.CRT$' } |
+        Sort-Object { [version](Split-Path (Split-Path $_.FullName -Parent) -Leaf) } -Descending)
+    if ($crtCandidates.Count -eq 0) {
+        $versions = @(Get-ChildItem -LiteralPath $redistRoot -Directory | Select-Object -ExpandProperty Name)
+        throw "No x64 Microsoft.VC143.CRT directory exists under $redistRoot; versions=$($versions -join ', ')"
+    }
+    $crtFolder = $crtCandidates[0]
+    $versionPath = Split-Path (Split-Path $crtFolder.FullName -Parent) -Parent
+    $redistVersion = Get-Item -LiteralPath $versionPath
+    $redistNoticeCandidates = @(Get-ChildItem -LiteralPath $redistVersion.FullName -Filter "redist.txt" -File -Recurse | Sort-Object FullName)
+    if ($redistNoticeCandidates.Count -eq 0) {
+        $redistNoticeCandidates = @(Get-ChildItem -LiteralPath $redistRoot -Filter "redist.txt" -File -Recurse | Sort-Object FullName)
+    }
+    if ($redistNoticeCandidates.Count -eq 0) {
+        throw "MSVC CRT directory exists at $($crtFolder.FullName), but redist.txt is absent under $redistRoot"
+    }
+    return [pscustomobject]@{
+        redist_root = $redistRoot
+        version = $redistVersion
+        crt_folder = $crtFolder.FullName
+        redist_notice = $redistNoticeCandidates[0].FullName
+    }
+}
+
 function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
     $installer = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio/Installer/vswhere.exe"
     if (-not (Test-Path -LiteralPath $installer)) { throw "VS where.exe is unavailable; cannot inspect PE dependencies or locate licensed CRT redist" }
@@ -85,14 +113,10 @@ function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
     $crtMissing = @(Get-CrtDependencyNames -Dependencies $missing)
     $redistVersion = $null
     if ($crtMissing.Count -gt 0) {
-        $redistRoot = Join-Path $vsInstall "VC/Redist/MSVC"
-        $redistVersion = Get-ChildItem -LiteralPath $redistRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1
-        if (-not $redistVersion) { throw "MSVC CRT is imported but no Visual C++ redistributable was found" }
-        $crtFolder = Join-Path $redistVersion.FullName "x64/Microsoft.VC143.CRT"
-        $redistNotice = Join-Path $redistVersion.FullName "redist.txt"
-        if (-not (Test-Path -LiteralPath $crtFolder) -or -not (Test-Path -LiteralPath $redistNotice)) {
-            throw "MSVC CRT redist or its redist.txt notice is missing"
-        }
+        $redist = Find-MsvcCrtRedist $vsInstall
+        $redistVersion = $redist.version
+        $crtFolder = $redist.crt_folder
+        $redistNotice = $redist.redist_notice
         $eulaUrl = "https://visualstudio.microsoft.com/wp-content/uploads/2021/09/Visual-C-Runtime-2015-2022-License-1.docx"
         $eulaPath = Join-Path $env:RUNNER_TEMP "Microsoft-Visual-C-Runtime-2015-2022-License.docx"
         Invoke-WebRequest -Uri $eulaUrl -OutFile $eulaPath
@@ -144,7 +168,7 @@ function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
     }
     $redistFiles = @()
     if ($crtMissing.Count -gt 0) {
-        $redistFiles = @(Get-ChildItem -LiteralPath (Join-Path $redistVersion.FullName "x64/Microsoft.VC143.CRT") -File | ForEach-Object {
+        $redistFiles = @(Get-ChildItem -LiteralPath $crtFolder -File | ForEach-Object {
             [ordered]@{ name = $_.Name; bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
         })
     }
@@ -201,6 +225,16 @@ if ($Mode -eq "TestPeDependencyRecords") {
     $roundTrip = $json | ConvertFrom-Json
     if ($roundTrip.dependencies.Count -ne 3 -or $roundTrip.msvc_crt_missing.Count -ne 2) { throw "PE dependency JSON fixture failed" }
     Write-Output "PE dependency record fixtures passed: single, multiple, empty, and JSON round-trip."
+    exit 0
+}
+
+if ($Mode -eq "TestMsvcRedistDiscovery") {
+    $installer = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio/Installer/vswhere.exe"
+    if (-not (Test-Path -LiteralPath $installer)) { throw "VS where.exe is unavailable" }
+    $vsInstall = (& $installer -latest -products '*' -property installationPath | Select-Object -First 1).Trim()
+    if (-not $vsInstall) { throw "No Visual Studio installation was found" }
+    $redist = Find-MsvcCrtRedist $vsInstall
+    Write-Output "MSVC CRT discovery passed; visual_studio=$vsInstall; redist_version=$($redist.version.Name); crt_folder=$($redist.crt_folder); redist_txt=$($redist.redist_notice)"
     exit 0
 }
 
