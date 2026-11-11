@@ -39,7 +39,8 @@ class PrepareVoiceBundleTests(unittest.TestCase):
                 put(voice_dir / "dictionary-MODEL_CARD.txt", (accent + " card").encode()),
             ]
             models_lock.append({"accent": accent, "revision": "fixed-revision", "files": files})
-            cards.append({"accent": accent, "sha256": files[-1]["sha256"], "card_text": (accent + " card")})
+            cards.append({"accent": accent, "revision": "fixed-revision", "bytes": files[-1]["bytes"],
+                          "sha256": files[-1]["sha256"], "card_text": (accent + " card")})
         lock = {"schema": 1, "models": models_lock}
         lock_path = root / "voice_runtime_lock.json"
         lock_path.write_text(json.dumps(lock), encoding="utf-8")
