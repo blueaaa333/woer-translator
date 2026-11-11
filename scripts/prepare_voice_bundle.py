@@ -124,7 +124,17 @@ def prepare(runtime_root: Path, model_root: Path, license_report: Path,
         if not source.is_file():
             raise FileNotFoundError(f"Missing pinned runtime/source evidence: {source}")
     shutil.copy2(lock_path, license_root / "voice_runtime_lock.json")
+    locked_models = json.loads(lock_path.read_text(encoding="utf-8"))["models"]
     runtime_manifest = json.loads(runtime_manifest_path.read_text(encoding="utf-8-sig"))
+    license_review = json.loads(Path(license_report).read_text(encoding="utf-8"))
+    if license_review.get("revision_requested") != license_review.get("revision_returned"):
+        raise ValueError("Pinned model-license report revision mismatch")
+    for model in locked_models:
+        card = next((item for item in model["files"] if item["name"].endswith("MODEL_CARD.txt")), None)
+        evidence = next((item for item in license_review.get("models", []) if item.get("accent") == model["accent"]), None)
+        if (not card or not evidence or evidence.get("revision") != model["revision"]
+                or evidence.get("bytes") != card["bytes"] or evidence.get("sha256") != card["sha256"]):
+            raise ValueError(f"Pinned license evidence does not match {model['accent']} model card")
     crt_records = []
     if crt_source is not None:
         crt_source = Path(crt_source)
