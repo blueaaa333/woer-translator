@@ -69,7 +69,7 @@ def make_read_only(root):
     try:
         subprocess.run(
             ["icacls", str(root), "/inheritance:r", "/grant:r", f"{user}:(OI)(CI)(RX)",
-             "/deny", f"{user}:(OI)(CI)(W,AD,WD,DC,DE)", "/T", "/C"],
+             "/deny", f"{user}:(OI)(CI)(AD,WD,DC,DE)", "/T", "/C"],
             check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
         )
     except Exception:
@@ -84,7 +84,11 @@ def make_read_only(root):
         probe.unlink(missing_ok=True)
         restore_writable(root)
         raise AssertionError("Staged install tree is still writable")
-    existing = next(path for path in root.rglob("*") if path.is_file())
+    try:
+        existing = next(path for path in root.rglob("*") if path.is_file())
+    except Exception:
+        restore_writable(root)
+        raise
     try:
         with existing.open("r+b") as stream:
             original = stream.read(1)
@@ -92,8 +96,9 @@ def make_read_only(root):
             stream.write(original)
     except OSError:
         return
-    restore_writable(root)
-    raise AssertionError("An installed file is still writable")
+    else:
+        restore_writable(root)
+        raise AssertionError("An installed file is still writable")
 
 
 def restore_writable(root):

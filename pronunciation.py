@@ -56,7 +56,9 @@ class SpeechEngine:
         bundled_folder=self.bundle_root/'voices'/name
         for folder in (user_folder,bundled_folder):
             try:
-                model,_,_,_,_=voice_files(folder,accent)
+                pair=voice_files(folder,accent)
+                if not pair:raise ValueError('Voice selector returned no model pair')
+                model=pair[0]
                 if model.name=='dictionary-voice.onnx' and model.stat().st_size<1_000_000:
                     raise ValueError('Managed voice model is incomplete')
                 return folder
@@ -74,7 +76,7 @@ class SpeechEngine:
             key=f'dictionary-profile-v1|{expected}|{config_hash}|{length_scale}|{config.get("dataset")}|{model.stat().st_size}|{model.stat().st_mtime_ns}|{word.lower()}'
             target=self.cache/(hashlib.sha256(key.encode()).hexdigest()+'.wav')
             return target if target.exists() and self.valid_wave(target) else None
-        except (OSError,ValueError):return None
+        except (OSError,ValueError,TypeError):return None
     def quick_recording(self,word,accent):
         try:
             voice_files(self._voice_folder(accent),accent)

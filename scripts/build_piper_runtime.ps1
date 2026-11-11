@@ -47,9 +47,10 @@ function Get-PeDependencies([string]$RuntimeOut, [string]$Dumpbin) {
         $names = [regex]::Matches($text, '(?im)^\s+([A-Za-z0-9_.+-]+\.dll)\s*$') | ForEach-Object { $_.Groups[1].Value }
         foreach ($name in ($names | Sort-Object -Unique)) {
             $inBundle = Test-Path -LiteralPath (Join-Path $RuntimeOut $name)
-            $system = Test-Path -LiteralPath (Join-Path (Join-Path $env:SystemRoot "System32") $name)
+            $msvcCrt = $name -match '^(concrt|msvcp|vcruntime|vcamp|vcomp)[0-9_]*\.dll$'
+            $system = (Test-Path -LiteralPath (Join-Path (Join-Path $env:SystemRoot "System32") $name)) -and -not $msvcCrt
             $apiSet = $name -match '^(api|ext)-ms-win-'
-            $records += [ordered]@{ binary = $binary.Name; dependency = $name; bundled = $inBundle; windows_system = $system -or $apiSet }
+            $records += [ordered]@{ binary = $binary.Name; dependency = $name; bundled = $inBundle; windows_system = $system -or $apiSet; msvc_crt = $msvcCrt }
         }
     }
     return $records
@@ -175,6 +176,12 @@ Build-CMake "piper-phonemize" $phonemize $phonemizeInstall @("-DESPEAK_NG_DIR=$e
 $piperCompileHook = Join-Path $work "piper-spdlog-compile-definition.cmake"
 Set-Content -LiteralPath $piperCompileHook -Value "add_compile_definitions(SPDLOG_FMT_EXTERNAL)" -Encoding ASCII
 Build-CMake "piper" $piper $piperInstall @("-DFMT_DIR=$fmtInstall","-DSPDLOG_DIR=$spdlogInstall","-DPIPER_PHONEMIZE_DIR=$phonemizeInstall","-DCMAKE_PROJECT_INCLUDE=$piperCompileHook")
+$piperProject = Get-Content -LiteralPath (Join-Path $work "piper/piper.vcxproj") -Raw
+if ($piperProject -notmatch "SPDLOG_FMT_EXTERNAL") { throw "Piper project is missing the external fmt compile definition" }
+if ($piperProject -notmatch "<WarningLevel>Level3</WarningLevel>" -or $piperProject -notmatch "<ExceptionHandling>Sync</ExceptionHandling>") {
+    throw "Piper project did not retain the normal MSVC warning and C++ exception settings"
+}
+Write-Output "Piper project retained MSVC warning/exception defaults and added SPDLOG_FMT_EXTERNAL via CMake hook."
 
 $runtimeOut = Join-Path $OutputRoot "speech/runtime/piper"
 New-Item -ItemType Directory -Path $runtimeOut,(Join-Path $OutputRoot "licenses/onnxruntime") -Force | Out-Null
