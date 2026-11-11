@@ -9,6 +9,7 @@ on:
       - scripts/archive_piper_sources.ps1
       - scripts/fetch_pinned_voices.py
       - scripts/voice_runtime_smoke.py
+      - scripts/preflight_msvc_license.py
       - pronunciation.py
       - voice_profile.py
       - lexicon.py
@@ -92,12 +93,17 @@ jobs:
       - name: Read fixed-revision metadata and model cards only
         shell: pwsh
         run: python scripts/preflight_voice_licenses.py --lock scripts/voice_runtime_lock.json --report build/voice-licensing/voice-license-preflight.json
+      - name: Read official Microsoft CRT license terms and REDIST source
+        shell: pwsh
+        run: python scripts/preflight_msvc_license.py --report build/voice-licensing/msvc-license-source-review.json
       - name: Upload text-only license evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: voice-license-preflight-${{ github.run_id }}
-          path: build/voice-licensing/voice-license-preflight.json
+          path: |
+            build/voice-licensing/voice-license-preflight.json
+            build/voice-licensing/msvc-license-source-review.json
           if-no-files-found: warn
           retention-days: 14
 

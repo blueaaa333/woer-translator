@@ -10,6 +10,7 @@ $ErrorActionPreference = "Stop"
 $lock = Get-Content -LiteralPath $LockPath -Raw | ConvertFrom-Json
 $runtime = $lock.runtime
 $work = Join-Path $env:RUNNER_TEMP "woer-piper-build"
+$script:RunnerMsvcCrtPath = $null
 
 function Invoke-Native([string]$File, [string[]]$Arguments) {
     & $File @Arguments
@@ -50,7 +51,7 @@ function Get-PeDependencies([string]$RuntimeOut, [string]$Dumpbin) {
             $msvcCrt = $name -match '^(concrt|msvcp|vcruntime|vcamp|vcomp)[0-9_]*\.dll$'
             $system = (Test-Path -LiteralPath (Join-Path (Join-Path $env:SystemRoot "System32") $name)) -and -not $msvcCrt
             $apiSet = $name -match '^(api|ext)-ms-win-'
-            $records += [pscustomobject]@{ binary = $binary.Name; dependency = $name; bundled = $inBundle; windows_system = $system -or $apiSet; msvc_crt = $msvcCrt }
+            $records += [pscustomobject]@{ binary = $binary.Name; dependency = $name; bundled = $inBundle; windows_system = $system; api_set = $apiSet; msvc_crt = $msvcCrt }
         }
     }
     return $records
@@ -107,10 +108,16 @@ function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
     $dumpbin = Join-Path $toolsVersion.FullName "bin/Hostx64/x64/dumpbin.exe"
     if (-not (Test-Path -LiteralPath $dumpbin)) { throw "dumpbin was not found at the selected MSVC tool path" }
 
+    $unexpectedCrtFiles = @(Get-ChildItem -LiteralPath $RuntimeOut -File -Recurse | Where-Object { $_.Name -match '^(concrt|msvcp|vcruntime|vcamp|vcomp)[0-9_]*\.dll$' })
+    if ($unexpectedCrtFiles.Count -gt 0) {
+        throw "Probe artifact must not contain Microsoft CRT DLLs: $($unexpectedCrtFiles.Name -join ', ')"
+    }
+
     $dependencies = @(Get-PeDependencies $RuntimeOut $dumpbin)
-    $missing = @($dependencies | Where-Object { -not $_.bundled -and -not $_.windows_system })
+    $missing = @($dependencies | Where-Object { -not $_.bundled -and -not $_.windows_system -and -not $_.api_set })
     $crtMissing = @(Get-CrtDependencyNames -Dependencies $missing)
     $redistVersion = $null
+    $signedCrtFiles = @()
     if ($crtMissing.Count -gt 0) {
         $redist = Find-MsvcCrtRedist $vsInstall
         $redistVersion = $redist.version
@@ -123,7 +130,6 @@ function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
             throw "Microsoft Visual C++ Runtime 2015-2022 license terms could not be retrieved"
         }
         $eulaHash = (Get-FileHash -LiteralPath $eulaPath -Algorithm SHA256).Hash.ToLowerInvariant()
-        Get-ChildItem -LiteralPath $crtFolder -File | Copy-Item -Destination $RuntimeOut -Force
         $noticeDir = Join-Path $OutputRoot "licenses/msvc-redist"
         New-Item -ItemType Directory -Path $noticeDir -Force | Out-Null
         $redistNoticeHash = $null
@@ -132,13 +138,12 @@ function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
             $redistNoticeHash = (Get-FileHash -LiteralPath $redistNotice -Algorithm SHA256).Hash.ToLowerInvariant()
         }
         $redistributionListUrl = "https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution"
-        $redistributionListPath = Join-Path $noticeDir "visual-studio-2022-redistribution.html"
+        $redistributionListPath = Join-Path $env:RUNNER_TEMP "visual-studio-2022-redistribution.html"
         Invoke-WebRequest -Uri $redistributionListUrl -OutFile $redistributionListPath
         if ((Get-Item -LiteralPath $redistributionListPath).Length -lt 10000) {
             throw "Microsoft Visual Studio 2022 redistribution list snapshot is unexpectedly small"
         }
         $redistributionListHash = (Get-FileHash -LiteralPath $redistributionListPath -Algorithm SHA256).Hash.ToLowerInvariant()
-        $signedCrtFiles = @()
         foreach ($crtDll in (Get-ChildItem -LiteralPath $crtFolder -Filter "*.dll" -File)) {
             $signature = Get-AuthenticodeSignature -LiteralPath $crtDll.FullName
             $signer = if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { "" }
@@ -147,6 +152,7 @@ function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
             }
             $signedCrtFiles += [pscustomobject]@{
                 name = $crtDll.Name
+                bytes = $crtDll.Length
                 file_version = [Diagnostics.FileVersionInfo]::GetVersionInfo($crtDll.FullName).FileVersion
                 sha256 = (Get-FileHash -LiteralPath $crtDll.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
                 signature_status = $signature.Status.ToString()
@@ -155,10 +161,21 @@ function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
             }
         }
         if ($signedCrtFiles.Count -eq 0) { throw "The selected MSVC CRT redistributable directory contains no DLLs" }
+        $availableCrtNames = @($signedCrtFiles | ForEach-Object { $_.name })
+        $unavailableCrtNames = @($crtMissing | Where-Object { $availableCrtNames -notcontains $_ })
+        if ($unavailableCrtNames.Count -gt 0) {
+            throw "Runner MSVC redist $($redistVersion.Name) lacks imported CRT DLLs: $($unavailableCrtNames -join ', ')"
+        }
+        $script:RunnerMsvcCrtPath = $crtFolder
+        # The runner-provided CRT is used only for this smoke test. It is never
+        # copied into the public artifact; standalone redistribution rights
+        # require a separate publisher-license review.
+        $missing = @($missing | Where-Object { $crtMissing -notcontains $_.dependency })
         $msvcLicenseEvidence = [ordered]@{
             product = "Microsoft Visual C++ Runtime 2015-2022"
             visual_studio_redist_version = $redistVersion.Name
             source_directory = $crtFolder
+            included_in_probe_artifact = $false
             redist_txt_present_in_installation = [bool]$redistNotice
             redist_txt_sha256 = $redistNoticeHash
             license_terms_url = $eulaUrl
@@ -171,7 +188,7 @@ function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
         }
         $msvcLicenseEvidence | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $noticeDir "msvc-redist-evidence.json") -Encoding UTF8
         $dependencies = @(Get-PeDependencies $RuntimeOut $dumpbin)
-        $missing = @($dependencies | Where-Object { -not $_.bundled -and -not $_.windows_system })
+        $missing = @($dependencies | Where-Object { -not $_.bundled -and -not $_.windows_system -and -not $_.api_set })
     }
     if ($missing.Count -gt 0) {
         $names = ($missing | ForEach-Object { "$($_.binary):$($_.dependency)" }) -join ", "
@@ -179,22 +196,26 @@ function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
     }
     $redistFiles = @()
     if ($crtMissing.Count -gt 0) {
-        $redistFiles = @(Get-ChildItem -LiteralPath $crtFolder -File | ForEach-Object {
-            [ordered]@{ name = $_.Name; bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
-        })
+        $redistFiles = $signedCrtFiles
     }
     $redistVersionName = $null
     if ($redistVersion) { $redistVersionName = $redistVersion.Name }
+    $standaloneReview = "not required by imports"
+    if ($crtMissing.Count -gt 0) { $standaloneReview = "required; not established by this runner test" }
     $report = [ordered]@{
         dumpbin = $dumpbin.Substring($vsInstall.Length + 1).Replace("\", "/")
         visual_studio_redist_version = $redistVersionName
-        msvc_redist_included = ($crtMissing.Count -gt 0)
+        msvc_redist_included = $false
+        runner_msvc_redist_used_for_smoke = ($crtMissing.Count -gt 0)
+        runner_msvc_redist_version = $redistVersionName
+        runner_msvc_redist_directory = $script:RunnerMsvcCrtPath
+        standalone_distribution_review = $standaloneReview
         dependencies = $dependencies
         msvc_redist_files = $redistFiles
     }
     $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $OutputRoot "runtime-dependency-report.json") -Encoding UTF8
     $dependencySummary = @($dependencies | ForEach-Object { "$($_.binary):$($_.dependency)" }) -join "; "
-    Write-Output "PE dependency closure passed; msvc_redist=$($crtMissing.Count -gt 0); dependencies=$dependencySummary"
+    Write-Output "PE imports verified for this runner smoke; msvc_crt_bundled=false; runner_redist=$redistVersionName; dependencies=$dependencySummary"
 }
 
 if ($Mode -eq "DiscoverOrt") {
@@ -219,11 +240,11 @@ if ($Mode -eq "DiscoverOrt") {
 }
 
 if ($Mode -eq "TestPeDependencyRecords") {
-    $single = [object[]]@([pscustomobject]@{ binary = "piper.exe"; dependency = "VCRUNTIME140.dll"; bundled = $false; windows_system = $false; msvc_crt = $true })
+    $single = [object[]]@([pscustomobject]@{ binary = "piper.exe"; dependency = "VCRUNTIME140.dll"; bundled = $false; windows_system = $false; api_set = $false; msvc_crt = $true })
     $multiple = [object[]]@(
-        [pscustomobject]@{ binary = "piper.exe"; dependency = "VCRUNTIME140.dll"; bundled = $false; windows_system = $false; msvc_crt = $true },
-        [pscustomobject]@{ binary = "piper-phonemize.dll"; dependency = "MSVCP140.dll"; bundled = $false; windows_system = $false; msvc_crt = $true },
-        [pscustomobject]@{ binary = "piper.exe"; dependency = "KERNEL32.dll"; bundled = $false; windows_system = $true; msvc_crt = $false }
+        [pscustomobject]@{ binary = "piper.exe"; dependency = "VCRUNTIME140.dll"; bundled = $false; windows_system = $false; api_set = $false; msvc_crt = $true },
+        [pscustomobject]@{ binary = "piper-phonemize.dll"; dependency = "MSVCP140.dll"; bundled = $false; windows_system = $false; api_set = $false; msvc_crt = $true },
+        [pscustomobject]@{ binary = "piper.exe"; dependency = "KERNEL32.dll"; bundled = $false; windows_system = $true; api_set = $false; msvc_crt = $false }
     )
     $empty = [object[]]@()
     $singleNames = @(Get-CrtDependencyNames -Dependencies $single)
@@ -310,7 +331,7 @@ Copy-Item -LiteralPath (Join-Path $piperInstall "espeak-ng-data") -Destination $
 Resolve-PeDependencies $runtimeOut $OutputRoot
 $oldPath = $env:PATH
 try {
-    $env:PATH = "$runtimeOut;$env:SystemRoot\System32;$env:SystemRoot"
+    $env:PATH = "$runtimeOut;$script:RunnerMsvcCrtPath;$env:SystemRoot\System32;$env:SystemRoot"
     Invoke-Native (Join-Path $runtimeOut "piper.exe") @("--version")
 } finally { $env:PATH = $oldPath }
 Copy-Item -LiteralPath (Join-Path $ortRoot "LICENSE") -Destination (Join-Path $OutputRoot "licenses/onnxruntime/LICENSE")
@@ -334,6 +355,7 @@ if ($Mode -eq "VoiceSmoke") {
     }
     $modelRoot = Join-Path $env:RUNNER_TEMP "woer-piper-voice-input"
     Invoke-Native "python" @("scripts/fetch_pinned_voices.py","--lock",$LockPath,"--dest",$modelRoot)
+    $env:WOER_TEST_CRT_PATH = $script:RunnerMsvcCrtPath
     Invoke-Native "python" @("scripts/voice_runtime_smoke.py","--runtime",$runtimeOut,"--models",(Join-Path $modelRoot "speech/voices"),
         "--build-root",$OutputRoot,"--lock",$LockPath,"--report",(Join-Path $OutputRoot "voice-smoke.json"))
 }

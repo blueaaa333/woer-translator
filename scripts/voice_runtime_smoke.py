@@ -173,7 +173,14 @@ def run_smoke(args):
         socket.create_connection = blocked_network
         socket.socket.connect = blocked_network
         previous_path = os.environ.get("PATH", "")
-        system_path = os.pathsep.join((str(runtime_target), str(Path(os.environ["SystemRoot"]) / "System32"), os.environ["SystemRoot"]))
+        runner_crt = os.environ.get("WOER_TEST_CRT_PATH")
+        runtime_search_path = [str(runtime_target)]
+        if runner_crt:
+            runner_crt_path = Path(runner_crt).resolve()
+            if not runner_crt_path.is_dir() or runner_crt_path.is_relative_to(package_root.resolve()):
+                raise AssertionError("Runner CRT must come from the Visual Studio test environment, outside the staged install tree")
+            runtime_search_path.append(str(runner_crt_path))
+        system_path = os.pathsep.join((*runtime_search_path, str(Path(os.environ["SystemRoot"]) / "System32"), os.environ["SystemRoot"]))
         results = []
         try:
             if not engine.prefer_recordings:
@@ -239,6 +246,8 @@ def run_smoke(args):
 
     return {
         "offline_recording_service_blocked": True,
+        "msvc_crt_packaged": False,
+        "runner_msvc_crt_path": os.environ.get("WOER_TEST_CRT_PATH"),
         "recording_preference_preserved": True,
         "preferences_file_preserved": True,
         "partial_user_pairs_fell_back_per_accent": True,
@@ -267,3 +276,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

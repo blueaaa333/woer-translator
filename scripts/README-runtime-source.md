@@ -18,15 +18,16 @@ compiler's default exception, warning or runtime flags. The hook is generated
 from the archived build script and is not a separate untracked patch.
 
 The build also inspects the PE import table. If the binaries require MSVC CRT
-DLLs, the Windows validation artifact includes the unmodified files from that
-runner's Visual Studio 2022 `Microsoft.VC143.CRT` redistributable directory
-and `msvc-redist-evidence.json`. If the runner installation has `redist.txt`,
-the artifact copies it and records its SHA-256. If it does not, the artifact
-preserves an HTML snapshot and SHA-256 from Microsoft's official redistribution
-list page and records that the local file was absent. The report also records
-the selected redist version and exact source directory, the official Microsoft
-Visual C++ Runtime 2015-2022 license URL and downloaded document hash, and the
-file version, SHA-256, and verified Microsoft Authenticode signer for each DLL.
+DLLs, this probe verifies the runner's Visual Studio 2022
+`Microsoft.VC143.CRT` directory and uses that directory on `PATH` for smoke
+testing. It does not copy Microsoft CRT binaries into the public artifact.
+`msvc-redist-evidence.json` records the redist version and exact source
+directory, the official Microsoft Visual C++ Runtime 2015-2022 license URL
+and downloaded document hash, and the file version, SHA-256, and verified
+Microsoft Authenticode signer for each runner DLL. If `redist.txt` exists in
+the runner installation, its hash is recorded. If it does not, the report
+records its absence and the artifact retains the official Microsoft
+redistribution-list URL/hash instead.
 
 Microsoft's official [Visual Studio 2022 redistribution list](https://learn.microsoft.com/visualstudio/releases/2022/redistribution)
 states that REDIST.txt is the distributable list referenced by the applicable
@@ -34,10 +35,11 @@ Visual Studio license terms; the list is not itself the license. The applicable
 [Visual C++ Runtime 2015-2022 license terms](https://visualstudio.microsoft.com/license-terms/vs2022-cruntime/)
 and Microsoft's [redistribution guidance](https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files)
 are recorded with the artifact. These are Microsoft redistributables, not
-MIT/GPL components. The test record does not certify the rights of any
-particular publisher. Windows API-set/system imports remain classified
-separately from bundled MSVC CRT files; the runtime is rejected if any
-non-system import remains unresolved.
+MIT/GPL components. The test record does not establish the publisher's right
+to include Microsoft CRT files in a standalone release; that licensing
+condition remains a release gate. The smoke result is specific to the
+runner's installed CRT. Windows System32 and API-set imports remain separate
+from the runner CRT and from bundled files.
 
 eSpeak NG is GPL-3.0-or-later. Any redistributed runtime must be accompanied
 by the matching source archive and notices generated with that runtime.
