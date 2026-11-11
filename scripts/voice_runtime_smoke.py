@@ -131,6 +131,157 @@ def audio_summary(path, accent):
     }
 
 
+
+def same_directory(left, right):
+    left = Path(left)
+    right = Path(right)
+    if left.exists() and right.exists():
+        try:
+            return left.samefile(right)
+        except OSError:
+            pass
+    return os.path.normcase(os.path.abspath(left)) == os.path.normcase(os.path.abspath(right))
+
+
+def voice_candidate_diagnostic(folder, accent):
+    folder = Path(folder)
+    managed_model = folder / "dictionary-voice.onnx"
+    managed_config = folder / "dictionary-voice.onnx.json"
+    detail = {
+        "folder": str(folder),
+        "managed_model_exists": managed_model.is_file(),
+        "managed_model_bytes": managed_model.stat().st_size if managed_model.is_file() else None,
+        "managed_config_exists": managed_config.is_file(),
+        "managed_config_bytes": managed_config.stat().st_size if managed_config.is_file() else None,
+    }
+    if managed_config.is_file():
+        try:
+            data = json.loads(managed_config.read_text(encoding="utf-8"))
+            detail["managed_language_code"] = data.get("language", {}).get("code")
+        except Exception as exc:
+            detail["managed_config_error"] = f"{type(exc).__name__}: {exc}"
+    try:
+        model, config, data, upgraded, config_hash = voice_files(folder, accent)
+        detail["voice_files"] = {
+            "ok": True,
+            "model": str(model),
+            "model_bytes": model.stat().st_size,
+            "config": str(config),
+            "language_code": data.get("language", {}).get("code"),
+            "upgraded": upgraded,
+            "config_sha256": config_hash,
+        }
+    except Exception as exc:
+        detail["voice_files"] = {
+            "ok": False,
+            "exception": f"{type(exc).__name__}: {exc}",
+        }
+    return detail
+
+
+def download_verified_config(model):
+    item = next((entry for entry in model["files"] if entry["name"] == "dictionary-voice.onnx.json"), None)
+    if item is None:
+        raise ValueError(f"Locked config is missing for {model['accent']}")
+    request = urllib.request.Request(
+        item["url"],
+        headers={"User-Agent": "WoerTranslator-voice-selection-probe/1"},
+    )
+    with urllib.request.urlopen(request, timeout=60) as response:
+        data = response.read(item["bytes"] + 1)
+    actual = hashlib.sha256(data).hexdigest()
+    if len(data) != item["bytes"] or actual != item["sha256"]:
+        raise ValueError(
+            f"Config verification failed for {model['accent']}: "
+            f"bytes={len(data)} sha256={actual}"
+        )
+    return item, data
+
+
+def run_selection_preflight(args):
+    lock = json.loads(args.lock.read_text(encoding="utf-8"))
+    verified_configs = {}
+    for model in lock["models"]:
+        item, data = download_verified_config(model)
+        verified_configs[model["accent"]] = (item, data)
+
+    with tempfile.TemporaryDirectory(prefix="woer-voice-selection-") as temp:
+        scratch = Path(temp)
+        package_root = scratch / "Woer Install 汉字 Space"
+        user_root = scratch / "用户 数据 Space" / "speech"
+        voices_target = package_root / "speech" / "voices"
+        config_evidence = []
+        for model in lock["models"]:
+            accent = model["accent"]
+            item, data = verified_configs[accent]
+            bundled = voices_target / accent
+            bundled.mkdir(parents=True, exist_ok=True)
+            model_path = bundled / "dictionary-voice.onnx"
+            # Selection only needs a present, over-threshold bundle model. This
+            # sparse placeholder is never passed to Piper or included in artifacts.
+            with model_path.open("wb") as stream:
+                stream.truncate(1_000_001)
+            (bundled / "dictionary-voice.onnx.json").write_bytes(data)
+            config_evidence.append({
+                "accent": accent,
+                "config_bytes": len(data),
+                "config_sha256": item["sha256"],
+                "config_url": item["url"],
+            })
+
+        # Match the real regression fixture: UK has a truncated model plus a
+        # valid config; US has only a valid config. Neither user pair is complete.
+        partial_uk = user_root / "voices" / "uk"
+        partial_uk.mkdir(parents=True)
+        (partial_uk / "dictionary-voice.onnx").write_bytes(b"truncated model")
+        (partial_uk / "dictionary-voice.onnx.json").write_bytes(verified_configs["uk"][1])
+        partial_us = user_root / "voices" / "us"
+        partial_us.mkdir(parents=True)
+        (partial_us / "dictionary-voice.onnx.json").write_bytes(verified_configs["us"][1])
+
+        engine = SpeechEngine(package_root, scratch / "user-cache", user_root=user_root)
+        results = []
+        failures = []
+        try:
+            for accent, label in ((1, "uk"), (2, "us")):
+                user_folder = user_root / "voices" / label
+                bundled_folder = voices_target / label
+                selected = engine._voice_folder(accent)
+                same_as_bundle = same_directory(selected, bundled_folder)
+                result = {
+                    "accent": label,
+                    "user_root": str(engine.root),
+                    "bundle_root": str(engine.bundle_root),
+                    "user_candidate": voice_candidate_diagnostic(user_folder, accent),
+                    "bundled_candidate": voice_candidate_diagnostic(bundled_folder, accent),
+                    "selected": str(selected),
+                    "expected": str(bundled_folder),
+                    "selected_is_expected_directory": same_as_bundle,
+                }
+                results.append(result)
+                if not same_as_bundle:
+                    failures.append(label)
+        finally:
+            engine.close()
+
+    result = {
+        "passed": not failures,
+        "selection_only": True,
+        "normal_app_path": "pronunciation.SpeechEngine._voice_folder",
+        "model_weights_downloaded": False,
+        "bundle_models_are_sparse_selection_placeholders": True,
+        "partial_user_fixture": {
+            "uk_model_bytes": len(b"truncated model"),
+            "uk_config_sha256": verified_configs["uk"][0]["sha256"],
+            "us_model_exists": False,
+            "us_config_sha256": verified_configs["us"][0]["sha256"],
+        },
+        "verified_configs": config_evidence,
+        "results": results,
+        "failed_accents": failures,
+    }
+    return result
+
 def run_smoke(args):
     lock = json.loads(args.lock.read_text(encoding="utf-8"))
     runtime_manifest = json.loads((args.build_root / "runtime-manifest.json").read_text(encoding="utf-8"))
@@ -187,10 +338,23 @@ def run_smoke(args):
                 raise AssertionError("Smoke unexpectedly changed the live-recording preference")
             os.environ["PATH"] = system_path
             for accent, label in ((1, "uk"), (2, "us")):
-                selected = engine._voice_folder(accent).resolve()
-                expected_folder = (voices_target / label).resolve()
-                if selected != expected_folder:
-                    raise AssertionError(f"Partial user {label} directory masked the bundled voice")
+                selected_path = engine._voice_folder(accent)
+                expected_folder = voices_target / label
+                if not same_directory(selected_path, expected_folder):
+                    diagnostics = {
+                        "accent": label,
+                        "user_root": str(engine.root),
+                        "bundle_root": str(engine.bundle_root),
+                        "selected": str(selected_path),
+                        "expected": str(expected_folder),
+                        "user_candidate": voice_candidate_diagnostic(engine.root / "voices" / label, accent),
+                        "bundled_candidate": voice_candidate_diagnostic(expected_folder, accent),
+                    }
+                    raise AssertionError(
+                        f"Partial user {label} directory masked the bundled voice: "
+                        f"{json.dumps(diagnostics, sort_keys=True)}"
+                    )
+                selected = selected_path.resolve()
                 model, config, _voice_config, _upgraded, _config_hash = voice_files(selected, accent)
                 output = engine.render("water", accent)
                 if output.resolve().parent != cache.resolve():
@@ -233,13 +397,13 @@ def run_smoke(args):
         )
         override_engine = SpeechEngine(package_root, cache, user_root=override_root)
         try:
-            selected_custom = override_engine._voice_folder(1).resolve()
-            if selected_custom != custom_uk.resolve():
+            selected_custom = override_engine._voice_folder(1)
+            if not same_directory(selected_custom, custom_uk):
                 raise AssertionError("A complete legacy user voice pair no longer takes precedence")
             custom_model, custom_config, *_ = voice_files(selected_custom, 1)
             if custom_model.name != "voice.onnx" or custom_config.name != "voice.onnx.json":
                 raise AssertionError("Legacy custom voice selection was not preserved")
-            if override_engine._voice_folder(2).resolve() != (voices_target / "us").resolve():
+            if not same_directory(override_engine._voice_folder(2), voices_target / "us"):
                 raise AssertionError("Per-accent fallback did not preserve the other bundled accent")
         finally:
             override_engine.close()
@@ -260,18 +424,27 @@ def run_smoke(args):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--runtime", required=True, type=Path)
-    parser.add_argument("--models", required=True, type=Path)
-    parser.add_argument("--build-root", required=True, type=Path)
+    parser.add_argument("--selection-only", action="store_true")
+    parser.add_argument("--runtime", type=Path)
+    parser.add_argument("--models", type=Path)
+    parser.add_argument("--build-root", type=Path)
     parser.add_argument("--lock", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
     args = parser.parse_args()
-    result = run_smoke(args)
-    result["normal_app_path"] = "pronunciation.SpeechEngine.render"
-    result["model_weights_uploaded"] = False
+    if args.selection_only:
+        result = run_selection_preflight(args)
+    else:
+        for name in ("runtime", "models", "build_root"):
+            if getattr(args, name) is None:
+                parser.error(f"--{name.replace('_', '-')} is required unless --selection-only is used")
+        result = run_smoke(args)
+        result["normal_app_path"] = "pronunciation.SpeechEngine.render"
+        result["model_weights_uploaded"] = False
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(result, sort_keys=True))
+    if args.selection_only and not result["passed"]:
+        raise SystemExit(f"Voice selection preflight failed for: {', '.join(result['failed_accents'])}")
 
 
 if __name__ == "__main__":

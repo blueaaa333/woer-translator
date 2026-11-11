@@ -62,6 +62,10 @@ jobs:
           python -m unittest discover -s tests -p test_voice_bundle.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m unittest discover -s tests -p test_source_archive.py -v
+      - name: Preflight voice selection before native build
+        if: github.event_name == 'push' || github.event.inputs.mode == 'VoiceSmoke'
+        shell: pwsh
+        run: python scripts/voice_runtime_smoke.py --selection-only --lock scripts/voice_runtime_lock.json --report build/voice-runtime/voice-selection-preflight.json
       - name: Discover or build
         shell: pwsh
         env:
@@ -81,6 +85,7 @@ jobs:
             build/voice-runtime/piper-runtime-source.zip
             build/voice-runtime/source-manifest.json
             build/voice-runtime/voice-smoke.json
+            build/voice-runtime/voice-selection-preflight.json
           if-no-files-found: warn
           retention-days: 14
   voice-license-metadata:
