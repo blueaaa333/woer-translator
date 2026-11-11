@@ -156,7 +156,7 @@ function Invoke-AppVoiceSmoke([string]$Exe, [string]$LocalData, [string]$Label) 
         }
     }
     $expectedCrt = @("VCRUNTIME140.dll", "MSVCP140.dll")
-    $loadedNames = @($loaded | Select-Object -ExpandProperty module -Unique)
+    $loadedNames = @($loaded | ForEach-Object { $_["module"] } | Select-Object -Unique)
     $missingLoaded = @($expectedCrt | Where-Object { $_ -notin $loadedNames })
     if ($missingLoaded.Count) { throw "Piper did not report loaded CRT modules: $($missingLoaded -join ', ')" }
     Set-Content -LiteralPath $marker -Value "inspected" -Encoding ASCII
