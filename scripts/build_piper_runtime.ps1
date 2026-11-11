@@ -300,7 +300,7 @@ $ortItem = $runtime.sources | Where-Object name -eq "onnxruntime"
 if (-not $ortItem.windows_binary_sha256 -or $ortItem.windows_binary_sha256 -notmatch "^[a-f0-9]{64}$") {
     throw "ORT SHA-256 review gate is unset. Run DiscoverOrt, review it, update the lock, then rerun."
 }
-New-Item -ItemType Directory -Path $SourceRoot,$work,$OutputRoot | Out-Null
+New-Item -ItemType Directory -Path $SourceRoot,$work,$OutputRoot -Force | Out-Null
 $piper = Get-Source "piper"
 $phonemize = Get-Source "piper-phonemize"
 $espeak = Get-Source "espeak-ng"
