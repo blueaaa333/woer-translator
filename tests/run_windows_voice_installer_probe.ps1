@@ -169,10 +169,41 @@ function Invoke-AppVoiceSmoke([string]$Exe, [string]$LocalData, [string]$Label) 
 }
 
 function Install-Setup([string]$Path, [string]$InstallRoot) {
-    & $Path /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- "/DIR=$InstallRoot"
-    if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code ${LASTEXITCODE}: $Path" }
-    if (-not (Test-Path -LiteralPath (Join-Path $InstallRoot "WoerTranslator.exe"))) {
-        throw "Inno Setup returned success without installing WoerTranslator.exe"
+    $logName = "inno-install-{0}.log" -f ([Guid]::NewGuid().ToString("N"))
+    $installLog = Join-Path $resolvedReportRoot $logName
+    $arguments = @(
+        "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-",
+        "/LOG=`"$installLog`"", "/DIR=`"$InstallRoot`""
+    )
+    $installer = Start-Process -FilePath $Path -ArgumentList $arguments -Wait -PassThru
+    $exitCode = $installer.ExitCode
+    if ($exitCode -ne 0) { throw "Inno Setup failed with exit code ${exitCode}: $Path; log=$installLog" }
+    $expectedExe = Join-Path $InstallRoot "WoerTranslator.exe"
+    if (-not (Test-Path -LiteralPath $expectedExe -PathType Leaf)) {
+        $searchRoots = @($InstallRoot, (Join-Path $env:LOCALAPPDATA "Programs\WoerTranslator"), $testRoot) |
+            Select-Object -Unique
+        $foundExes = @()
+        foreach ($searchRoot in $searchRoots) {
+            if (Test-Path -LiteralPath $searchRoot -PathType Container) {
+                $foundExes += @(Get-ChildItem -LiteralPath $searchRoot -Filter "WoerTranslator.exe" -File -Recurse -ErrorAction SilentlyContinue |
+                    Select-Object -ExpandProperty FullName)
+            }
+        }
+        $logTail = if (Test-Path -LiteralPath $installLog -PathType Leaf) {
+            (Get-Content -LiteralPath $installLog -Tail 80) -join "`n"
+        } else { "<Inno log was not created>" }
+        $failure = [ordered]@{
+            installer = $Path
+            requested_install_root = $InstallRoot
+            expected_executable = $expectedExe
+            exit_code = $exitCode
+            process_waited = $true
+            found_executables = $foundExes
+            inno_log_path = $installLog
+            inno_log_tail = $logTail
+        }
+        $failure | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $resolvedReportRoot "installer-failure.json") -Encoding UTF8
+        throw "Inno Setup returned success without installing WoerTranslator.exe at the requested path; see installer-failure.json"
     }
 }
 
