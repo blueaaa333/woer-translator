@@ -138,7 +138,6 @@
     },
     "archive_scope": "Piper, piper-phonemize, eSpeak NG fork, fmt, spdlog source archives, ONNX Runtime source at exact commit, build scripts, lock and all notices. Runtime build must record gitlink/submodule SHAs and extracted binary asset SHA.",
     "not_verified": [
-      "The exact SHA-256 of the ONNX Runtime 1.14.1 Windows release archive",
       "A Windows compiler build of this source graph",
       "Corresponding-source completeness of the final staged runtime",
       "Real Cori/Kristin synthesis with the staged runtime"
