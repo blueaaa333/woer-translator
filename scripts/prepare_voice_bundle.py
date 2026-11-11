@@ -72,8 +72,8 @@ def _copy_license_evidence(report_path: Path, destination: Path) -> dict:
     mit = review.get("standard_mit_terms")
     if not readme or not mit or not mit.get("text"):
         raise ValueError("Pinned README or standard MIT text is missing")
-    (destination / "piper-voices-README.md").write_text(readme["text"], encoding="utf-8")
-    (destination / "MIT-LICENSE-TEMPLATE.txt").write_text(mit["text"], encoding="utf-8")
+    (destination / "piper-voices-README.md").write_bytes(readme["text"].encode("utf-8"))
+    (destination / "MIT-LICENSE-TEMPLATE.txt").write_bytes(mit["text"].encode("utf-8"))
     files_dir = destination / "repository-license-files"
     for item in review.get("license_files", []):
         if item.get("status") != "read" or not item.get("text"):
@@ -82,14 +82,14 @@ def _copy_license_evidence(report_path: Path, destination: Path) -> dict:
         if name in ("", ".", ".."):
             raise ValueError("Invalid model repository license filename")
         files_dir.mkdir(parents=True, exist_ok=True)
-        (files_dir / name).write_text(item["text"], encoding="utf-8")
+        (files_dir / name).write_bytes(item["text"].encode("utf-8"))
     cards = review.get("models", [])
     if len(cards) != 2 or any(not item.get("card_text") for item in cards):
         raise ValueError("Both pinned model-card texts are required")
     cards_dir = destination / "model-cards"
     cards_dir.mkdir(parents=True, exist_ok=True)
     for item in cards:
-        (cards_dir / f"{item['accent']}-MODEL_CARD.txt").write_text(item["card_text"], encoding="utf-8")
+        (cards_dir / f"{item['accent']}-MODEL_CARD.txt").write_bytes(item["card_text"].encode("utf-8"))
     return {
         "review_sha256": hashlib.sha256(report_bytes).hexdigest(),
         "readme_sha256": readme["sha256"],
@@ -166,6 +166,7 @@ def prepare(runtime_root: Path, model_root: Path, license_report: Path,
             "file": source_archive.name, "bytes": source_archive.stat().st_size,
             "sha256": sha256(license_root / source_archive.name),
         },
+        "source_manifest_sha256": sha256(license_root / source_manifest.name),
         "crt": {"test_only": bool(crt_records), "files": crt_records,
                 "redistribution_rights": "not established by this package probe"},
     }
@@ -202,11 +203,18 @@ def audit_embedded_voice_payload(base: Path) -> dict | None:
         raise RuntimeError("Voice package manifest revision mismatch")
     if sha256(source_archive) != package["runtime_source_archive"]["sha256"]:
         raise RuntimeError("Piper corresponding-source archive hash mismatch")
+    if sha256(source_manifest) != package["source_manifest_sha256"]:
+        raise RuntimeError("Piper source-manifest hash mismatch")
     review = json.loads(model_review.read_text(encoding="utf-8"))
     if review.get("revision_requested") != package["model_revision"] or review.get("repo_license_metadata", "").lower() != "mit":
         raise RuntimeError("Pinned model-license evidence does not match the voice payload")
     if hashlib.sha256(model_review.read_bytes()).hexdigest() != package["model_license_evidence"]["review_sha256"]:
         raise RuntimeError("Model-license evidence hash mismatch")
+    model_license = license_root / "model-license"
+    if sha256(model_license / "piper-voices-README.md") != package["model_license_evidence"]["readme_sha256"]:
+        raise RuntimeError("Pinned model repository README hash mismatch")
+    if sha256(model_license / "MIT-LICENSE-TEMPLATE.txt") != package["model_license_evidence"]["mit_text_sha256"]:
+        raise RuntimeError("MIT terms text hash mismatch")
     result = verify_speech_tree(base, lock, runtime_manifest)
     if result["files"] != package["speech_payload"]["files"]:
         raise RuntimeError("Speech payload file count differs from package manifest")
