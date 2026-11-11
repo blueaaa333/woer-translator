@@ -101,8 +101,17 @@
         "license_url": "https://github.com/microsoft/onnxruntime/blob/v1.14.1/LICENSE",
         "third_party_notice_url": "https://github.com/microsoft/onnxruntime/blob/v1.14.1/ThirdPartyNotices.txt",
         "windows_binary_url": "https://github.com/microsoft/onnxruntime/releases/download/v1.14.1/onnxruntime-win-x64-1.14.1.zip",
-        "windows_binary_sha256": null,
-        "status": "REVIEW_GATE_UPSTREAM_RELEASE_API_HAS_NO_DIGEST; DISCOVER_HASH_IN_AUTHORIZED_CI_THEN_REVIEW_AND_LOCK"
+        "windows_binary_sha256": "1243f2c505de8845b6927ae1cbde75b9372f16965c6b2c8db2279f385003fd85",
+        "windows_binary_sha256_evidence": {
+          "observed_at": "2026-11-11T07:01:06Z",
+          "bytes": 41748936,
+          "sha256": "1243f2c505de8845b6927ae1cbde75b9372f16965c6b2c8db2279f385003fd85",
+          "upstream_digest": null,
+          "release_api_asset": "https://api.github.com/repos/microsoft/onnxruntime/releases/tags/v1.14.1",
+          "workflow_run": "https://github.com/blueaaa333/woer-translator/actions/runs/42976402088",
+          "review_basis": "The official v1.14.1 release API asset name, URL, and 41,748,936-byte size matched the Windows CI HTTPS download; the release API publishes no digest."
+        },
+        "status": "CI_OBSERVED_HASH_PINNED; UPSTREAM_RELEASE_API_DIGEST_UNPUBLISHED"
       },
       {
         "name": "fmt",
