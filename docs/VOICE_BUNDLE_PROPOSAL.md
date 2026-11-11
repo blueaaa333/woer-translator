@@ -23,9 +23,12 @@ files; they do not validate model weights or runtime binaries.
 
 ## Review gates
 
-1. ONNX Runtime 1.14.1 release metadata returned no asset digest. DiscoverOrt
-   can record the downloaded file's SHA-256, but a human must review it and add
-   it to the lock before BuildRuntime will proceed.
+1. The official ONNX Runtime v1.14.1 release API lists the exact Windows asset
+   as 41,748,936 bytes but publishes no digest. A Windows CI HTTPS fetch
+   matched that size and observed SHA-256
+   `1243f2c505de8845b6927ae1cbde75b9372f16965c6b2c8db2279f385003fd85`; the
+   lock records the run and release metadata. This is observed acquisition
+   evidence, not an upstream-published checksum.
 2. The fixed Hugging Face revision page could not be reopened through the web
    tool. The accessible v1.0.0 repository/model-card pages show MIT metadata and
    LibriVox public-domain dataset statements; verify those claims at revision
