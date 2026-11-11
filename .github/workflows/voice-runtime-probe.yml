@@ -1,0 +1,60 @@
+name: Temporary Piper runtime validation
+on:
+  push:
+    branches: [codex/voice-bundle-runtime-probe]
+    paths:
+      - .github/workflows/voice-runtime-probe.yml
+      - scripts/voice_runtime_lock.json
+      - scripts/build_piper_runtime.ps1
+      - scripts/archive_piper_sources.ps1
+      - scripts/fetch_pinned_voices.py
+      - scripts/voice_runtime_smoke.py
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Discover ORT digest, build the runtime, or run voice smoke
+        required: true
+        type: choice
+        options: [DiscoverOrt, BuildRuntime, VoiceSmoke]
+        default: DiscoverOrt
+permissions:
+  contents: read
+concurrency:
+  group: temporary-piper-runtime-probe
+  cancel-in-progress: false
+jobs:
+  windows-runtime:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.ref }}
+      - name: Check runner tools
+        shell: pwsh
+        run: |
+          git --version
+          cmake --version
+          python --version
+      - name: Run path and packaging fixtures
+        shell: pwsh
+        run: python -m unittest discover -s tests -p test_voice_bundle.py -v
+      - name: Discover or build
+        shell: pwsh
+        env:
+          MODE: ${{ github.event.inputs.mode || 'DiscoverOrt' }}
+        run: ./scripts/build_piper_runtime.ps1 -Mode $env:MODE
+      - name: Upload short-lived validation artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: piper-runtime-probe-${{ github.run_id }}
+          path: |
+            build/voice-runtime/ort-hash-evidence.json
+            build/voice-runtime/speech/runtime/piper/**
+            build/voice-runtime/licenses/**
+            build/voice-runtime/runtime-manifest.json
+            build/voice-runtime/piper-runtime-source.zip
+            build/voice-runtime/voice-smoke.json
+          if-no-files-found: warn
+          retention-days: 14
