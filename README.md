@@ -9,9 +9,12 @@ smoke, and excludes them and synthesized audio from artifacts.
 
 - SourceArchive passed in run `42988040804`; the archive verifier checks six
   top-level projects and all locked nested gitlinks. It excludes ONNX weights.
-- BuildRuntime passed in run `42988040804` on `windows-2022`. Piper was built
-  from locked sources and the staged CLI returned `--version`. The next run
-  adds PE dependency closure checks and app-path synthesis.
+- BuildRuntime passed in run `42992174074` on `windows-2022`. Piper was built
+  from locked sources, PE import closure resolved, and the staged CLI returned
+  version `1.2.0`. The runtime/source artifact uploaded successfully. VoiceSmoke
+  then failed before render because the readonly ACL probe still allowed a new
+  file in the package root; the next run uses an explicit deny ACE and verifies
+  both creating and modifying files are blocked.
 - The fixed HF revision `5041a7a49ae5b3a0f30e6837769eb03fdbb231bd` was read in
   CI. Its root README declared MIT and the header revision matched. The two
   selected model cards matched their lock SHA-256 values and state that
@@ -21,6 +24,9 @@ smoke, and excludes them and synthesized audio from artifacts.
   the complete standard MIT terms, source URLs, revision headers and file
   hashes. It reports actual copyright lines when present and does not invent
   an owner or year. The model weights are not in this artifact.
+- Run `42992174074` read the pinned HF revision and the SHA-pinned SPDX MIT
+  template, but report generation ended with a `NameError` caused by a field
+  placed in the wrong object. That field is corrected for the next run.
 - The official ONNX Runtime v1.14.1 release API lists the Windows archive as
   41,748,936 bytes but publishes no digest. CI observed SHA-256
   `1243f2c505de8845b6927ae1cbde75b9372f16965c6b2c8db2279f385003fd85` over

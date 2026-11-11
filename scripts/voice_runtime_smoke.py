@@ -66,22 +66,42 @@ def verify_pinned_tree(root, lock, runtime_manifest):
 
 def make_read_only(root):
     user = os.environ.get("USERNAME") or getpass.getuser()
-    subprocess.run(
-        ["icacls", str(root), "/inheritance:r", "/grant:r", f"{user}:(OI)(CI)(RX)", "/T", "/C"],
-        check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-    )
+    try:
+        subprocess.run(
+            ["icacls", str(root), "/inheritance:r", "/grant:r", f"{user}:(OI)(CI)(RX)",
+             "/deny", f"{user}:(OI)(CI)(W,AD,WD,DC,DE)", "/T", "/C"],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        )
+    except Exception:
+        restore_writable(root)
+        raise
     probe = root / "write-probe.tmp"
     try:
         probe.write_text("must fail", encoding="ascii")
     except OSError:
-        return
+        pass
     else:
         probe.unlink(missing_ok=True)
+        restore_writable(root)
         raise AssertionError("Staged install tree is still writable")
+    existing = next(path for path in root.rglob("*") if path.is_file())
+    try:
+        with existing.open("r+b") as stream:
+            original = stream.read(1)
+            stream.seek(0)
+            stream.write(original)
+    except OSError:
+        return
+    restore_writable(root)
+    raise AssertionError("An installed file is still writable")
 
 
 def restore_writable(root):
     user = os.environ.get("USERNAME") or getpass.getuser()
+    subprocess.run(
+        ["icacls", str(root), "/remove:d", user, "/T", "/C"],
+        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
     subprocess.run(
         ["icacls", str(root), "/inheritance:e", "/grant:r", f"{user}:(OI)(CI)(F)", "/T", "/C"],
         check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,

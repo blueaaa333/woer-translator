@@ -156,8 +156,6 @@ def preflight(lock_path):
             "text": mit_text,
             "notice": "The template retains <year> and <copyright holders>; no owner or year is inferred. No root LICENSE/COPYING/NOTICE file was listed at the pinned HF revision." if not license_files else "The repository license files are preserved separately; no owner or year is inferred.",
         },
-        "copyright_notice_sources": result["copyright_notice_sources"],
-        "copyright_notice_finding": result["copyright_notice_finding"],
         "models": model_records,
         "weights_fetched": False,
         "redistribution_decision": "Astra approved the fixed-revision MIT/model-card evidence for this CI test only; this is not formal release approval.",
@@ -199,6 +197,8 @@ def main():
             "text": result["standard_mit_terms"]["text"],
             "notice": result["standard_mit_terms"]["notice"],
         },
+        "copyright_notice_sources": result["copyright_notice_sources"],
+        "copyright_notice_finding": result["copyright_notice_finding"],
         "models": [{
             "accent": item["accent"],
             "resolved_url": item["resolved_url"],

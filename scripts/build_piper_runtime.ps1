@@ -98,13 +98,16 @@ function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
     }
     $redistVersionName = $null
     if ($redistVersion) { $redistVersionName = $redistVersion.Name }
-    [ordered]@{
+    $report = [ordered]@{
         dumpbin = $dumpbin.Substring($vsInstall.Length + 1).Replace("\", "/")
         visual_studio_redist_version = $redistVersionName
         msvc_redist_included = ($crtMissing.Count -gt 0)
         dependencies = $dependencies
         msvc_redist_files = $redistFiles
-    } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $OutputRoot "runtime-dependency-report.json") -Encoding UTF8
+    }
+    $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $OutputRoot "runtime-dependency-report.json") -Encoding UTF8
+    $dependencySummary = @($dependencies | ForEach-Object { "$($_.binary):$($_.dependency)" }) -join "; "
+    Write-Output "PE dependency closure passed; msvc_redist=$($crtMissing.Count -gt 0); dependencies=$dependencySummary"
 }
 
 if ($Mode -eq "DiscoverOrt") {
