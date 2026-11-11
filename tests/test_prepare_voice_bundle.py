@@ -44,12 +44,13 @@ class PrepareVoiceBundleTests(unittest.TestCase):
         lock_path = root / "voice_runtime_lock.json"
         lock_path.write_text(json.dumps(lock), encoding="utf-8")
         readme = "---\nlicense: mit\n---\nPinned fixture README"
+        mit_text = "MIT text with placeholders"
         license_report = {
             "revision_requested": "fixed-revision",
             "revision_returned": "fixed-revision",
             "repo_license_metadata": "mit",
             "repo_license_text": {"text": readme, "sha256": hashlib.sha256(readme.encode()).hexdigest()},
-            "standard_mit_terms": {"text": "MIT text with placeholders", "sha256": "fixture-mit-hash"},
+            "standard_mit_terms": {"text": mit_text, "sha256": hashlib.sha256(mit_text.encode()).hexdigest()},
             "license_files": [], "models": cards,
             "copyright_notice_finding": "No owner or year inferred.",
         }
