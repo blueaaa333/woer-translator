@@ -52,7 +52,9 @@ if ($Mode -eq "DiscoverOrt") {
         source_commit = $item.commit
         review = "Observed over HTTPS; human review required before the value is copied into the lock."
     }
-    $evidence | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $OutputRoot "ort-hash-evidence.json") -Encoding UTF8
+    $evidenceJson = $evidence | ConvertTo-Json -Depth 5 -Compress
+    $evidenceJson | Set-Content -LiteralPath (Join-Path $OutputRoot "ort-hash-evidence.json") -Encoding UTF8
+    Write-Output $evidenceJson
     Write-Output "Digest evidence written; this mode does not build or trust the asset."
     exit 0
 }
