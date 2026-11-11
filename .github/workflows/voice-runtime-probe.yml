@@ -48,7 +48,7 @@ jobs:
       - name: Discover or build
         shell: pwsh
         env:
-          MODE: ${{ github.event_name == 'push' && 'SourceArchive' || github.event.inputs.mode || 'DiscoverOrt' }}
+          MODE: ${{ github.event_name == 'push' && 'BuildRuntime' || github.event.inputs.mode || 'DiscoverOrt' }}
         run: ./scripts/build_piper_runtime.ps1 -Mode $env:MODE
       - name: Upload short-lived validation artifact
         if: always()
