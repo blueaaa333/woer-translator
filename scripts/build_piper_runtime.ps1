@@ -73,7 +73,7 @@ function Find-MsvcCrtRedist([string]$VisualStudioPath) {
     $redistRoot = Join-Path $VisualStudioPath "VC/Redist/MSVC"
     if (-not (Test-Path -LiteralPath $redistRoot)) { throw "MSVC redistributable root is missing: $redistRoot" }
     $crtCandidates = @(Get-ChildItem -LiteralPath $redistRoot -Directory -Recurse |
-        Where-Object { $_.Name -eq "Microsoft.VC143.CRT" -and $_.FullName -match '[\\/]x64[\\/]Microsoft\.VC143\.CRT$' } |
+        Where-Object { $_.Name -eq "Microsoft.VC143.CRT" -and $_.FullName -match '[\\/]x64[\\/]Microsoft\.VC143\.CRT$' -and $_.Parent.Parent.Name -match '^\d+(\.\d+){1,3}$' } |
         Sort-Object { [version]$_.Parent.Parent.Name } -Descending)
     if ($crtCandidates.Count -eq 0) {
         $versions = @(Get-ChildItem -LiteralPath $redistRoot -Directory | Select-Object -ExpandProperty Name)
