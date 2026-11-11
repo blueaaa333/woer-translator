@@ -96,7 +96,7 @@ $espeakInstall = Join-Path $install "espeak-ng"
 $phonemizeInstall = Join-Path $install "piper-phonemize"
 $piperInstall = Join-Path $install "piper"
 Build-CMake "fmt" $fmt $fmtInstall @("-DFMT_DOC=OFF","-DFMT_TEST=OFF","-DBUILD_SHARED_LIBS=OFF")
-Build-CMake "spdlog" $spdlog $spdlogInstall @("-DSPDLOG_BUILD_SHARED=OFF","-DSPDLOG_INSTALL=ON","-DSPDLOG_FMT_EXTERNAL=ON","-DFMT_DIR=$(Join-Path $fmtInstall 'lib/cmake/fmt')")
+Build-CMake "spdlog" $spdlog $spdlogInstall @("-DSPDLOG_BUILD_SHARED=OFF","-DSPDLOG_INSTALL=ON","-DSPDLOG_FMT_EXTERNAL=ON","-Dfmt_DIR=$(Join-Path $fmtInstall 'lib/cmake/fmt')")
 Build-CMake "espeak-ng" $espeak $espeakInstall @("-DBUILD_SHARED_LIBS=ON","-DUSE_ASYNC=OFF","-DUSE_MBROLA=OFF","-DUSE_LIBSONIC=OFF","-DUSE_LIBPCAUDIO=OFF","-DUSE_KLATT=OFF","-DUSE_SPEECHPLAYER=OFF")
 Build-CMake "piper-phonemize" $phonemize $phonemizeInstall @("-DESPEAK_NG_DIR=$espeakInstall","-DONNXRUNTIME_DIR=$ortRoot")
 Build-CMake "piper" $piper $piperInstall @("-DFMT_DIR=$fmtInstall","-DSPDLOG_DIR=$spdlogInstall","-DPIPER_PHONEMIZE_DIR=$phonemizeInstall")
