@@ -1,0 +1,138 @@
+{
+  "schema": 1,
+  "profile": "piper-2023.11.14-2-windows-x64-rebuild",
+  "models": [
+    {
+      "accent": "uk",
+      "revision": "5041a7a49ae5b3a0f30e6837769eb03fdbb231bd",
+      "files": [
+        {
+          "name": "dictionary-voice.onnx",
+          "bytes": 114219352,
+          "sha256": "470b4dd634c98f8a4850d7626ffc3dfc90774628eeef6605a6dd8f88f30a5903",
+          "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_GB/cori/high/en_GB-cori-high.onnx"
+        },
+        {
+          "name": "dictionary-voice.onnx.json",
+          "bytes": 4963,
+          "sha256": "9e7fb5b5671612c22f3c81cbe46c1ae87b031a4632bcb509e499dad6f1e2adec",
+          "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_GB/cori/high/en_GB-cori-high.onnx.json"
+        },
+        {
+          "name": "dictionary-MODEL_CARD.txt",
+          "bytes": 468,
+          "sha256": "136e7bd168b6c35b4a5df01a0253297e5773b5775ceae0af5160f264aa58208f",
+          "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_GB/cori/high/MODEL_CARD"
+        }
+      ],
+      "license_evidence": {
+        "repo_license": "MIT metadata shown by Hugging Face at v1.0.0",
+        "model_card": "LibriVox dataset stated as public domain",
+        "fixed_revision_page": "https://huggingface.co/rhasspy/piper-voices/tree/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_GB/cori/high",
+        "readable_reference": "https://huggingface.co/rhasspy/piper-voices/blob/v1.0.0/en/en_GB/cori/high/MODEL_CARD",
+        "status": "REVIEW_GATE_FIXED_REVISION_LICENSE_NOT_REOPENED_BY_WEB_TOOL"
+      }
+    },
+    {
+      "accent": "us",
+      "revision": "5041a7a49ae5b3a0f30e6837769eb03fdbb231bd",
+      "files": [
+        {
+          "name": "dictionary-voice.onnx",
+          "bytes": 63531379,
+          "sha256": "5849957f929cbf720c258f8458692d6103fff2f0e3d3b19c8259474bb06a18d4",
+          "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_US/kristin/medium/en_US-kristin-medium.onnx"
+        },
+        {
+          "name": "dictionary-voice.onnx.json",
+          "bytes": 4968,
+          "sha256": "5681426d4aead22195de70531eeeeddb46493cfaffc5764b2ea3db73428b651c",
+          "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_US/kristin/medium/en_US-kristin-medium.onnx.json"
+        },
+        {
+          "name": "dictionary-MODEL_CARD.txt",
+          "bytes": 479,
+          "sha256": "8c181b1d5f7d8152b914faab941fcbe6b8f0495e63e5189d6f27b8c68c8393fc",
+          "url": "https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_US/kristin/medium/MODEL_CARD"
+        }
+      ],
+      "license_evidence": {
+        "repo_license": "MIT metadata shown by Hugging Face at v1.0.0",
+        "model_card": "LibriVox dataset stated as public domain",
+        "fixed_revision_page": "https://huggingface.co/rhasspy/piper-voices/tree/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_US/kristin/medium",
+        "readable_reference": "https://huggingface.co/rhasspy/piper-voices/blob/v1.0.0/en/en_US/kristin/medium/MODEL_CARD",
+        "status": "REVIEW_GATE_FIXED_REVISION_LICENSE_NOT_REOPENED_BY_WEB_TOOL"
+      }
+    }
+  ],
+  "runtime": {
+    "target": "Windows x64",
+    "sources": [
+      {
+        "name": "piper",
+        "version": "2023.11.14-2",
+        "repository": "https://github.com/rhasspy/piper.git",
+        "commit": "38917ffd8c0e219c6581d73e07b30ef1d572fce1",
+        "license": "MIT",
+        "license_url": "https://github.com/rhasspy/piper/blob/2023.11.14-2/LICENSE.md"
+      },
+      {
+        "name": "piper-phonemize",
+        "version": "2023.11.14-2",
+        "repository": "https://github.com/rhasspy/piper-phonemize.git",
+        "commit": "7e9174083b94fcc3c51c983a2394593abd81925b",
+        "license": "MIT",
+        "license_url": "https://github.com/rhasspy/piper-phonemize/blob/2023.11.14-2/LICENSE.md"
+      },
+      {
+        "name": "espeak-ng",
+        "version": "release-era fork commit",
+        "repository": "https://github.com/rhasspy/espeak-ng.git",
+        "commit": "0f65aa301e0d6bae5e172cc74197d32a6182200f",
+        "license": "GPL-3.0-or-later",
+        "license_url": "https://github.com/rhasspy/espeak-ng/blob/0f65aa301e0d6bae5e172cc74197d32a6182200f/COPYING"
+      },
+      {
+        "name": "onnxruntime",
+        "version": "1.14.1",
+        "repository": "https://github.com/microsoft/onnxruntime.git",
+        "commit": "c57cf374b67f72575546d7b4c69a1af4972e2b54",
+        "license": "MIT",
+        "license_url": "https://github.com/microsoft/onnxruntime/blob/v1.14.1/LICENSE",
+        "third_party_notice_url": "https://github.com/microsoft/onnxruntime/blob/v1.14.1/ThirdPartyNotices.txt",
+        "windows_binary_url": "https://github.com/microsoft/onnxruntime/releases/download/v1.14.1/onnxruntime-win-x64-1.14.1.zip",
+        "windows_binary_sha256": null,
+        "status": "REVIEW_GATE_UPSTREAM_RELEASE_API_HAS_NO_DIGEST; DISCOVER_HASH_IN_AUTHORIZED_CI_THEN_REVIEW_AND_LOCK"
+      },
+      {
+        "name": "fmt",
+        "version": "10.0.0",
+        "repository": "https://github.com/fmtlib/fmt.git",
+        "commit": "a0b8a92e3d1532361c2f7feb63babc5c18d00ef2",
+        "license": "MIT",
+        "license_url": "https://github.com/fmtlib/fmt/blob/10.0.0/LICENSE"
+      },
+      {
+        "name": "spdlog",
+        "version": "1.12.0",
+        "repository": "https://github.com/gabime/spdlog.git",
+        "commit": "7e635fca68d014934b4af8a1cf874f63989352b7",
+        "license": "MIT",
+        "license_url": "https://github.com/gabime/spdlog/blob/v1.12.0/LICENSE"
+      }
+    ],
+    "cmake_overrides": {
+      "piper_external_piper_phonemize": "Use pinned local source and installed prefix instead of refs/heads/master.zip",
+      "phonemize_external_espeak_ng": "Use pinned local source and installed prefix instead of refs/heads/master.zip",
+      "phonemize_onnxruntime": "Use only the pinned official 1.14.1 Windows x64 release archive after its SHA-256 is reviewed and filled",
+      "fmt_spdlog": "Build from pinned source commits and pass their local install prefixes"
+    },
+    "archive_scope": "Piper, piper-phonemize, eSpeak NG fork, fmt, spdlog source archives, ONNX Runtime source at exact commit, build scripts, lock and all notices. Runtime build must record gitlink/submodule SHAs and extracted binary asset SHA.",
+    "not_verified": [
+      "The exact SHA-256 of the ONNX Runtime 1.14.1 Windows release archive",
+      "A Windows compiler build of this source graph",
+      "Corresponding-source completeness of the final staged runtime",
+      "Real Cori/Kristin synthesis with the staged runtime"
+    ]
+  }
+}
