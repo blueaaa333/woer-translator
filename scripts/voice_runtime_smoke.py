@@ -169,18 +169,25 @@ def make_read_only(root, writable_cache):
         "before_config_read": before_configs,
         "before_acl": [acl_snapshot(path) for path in acl_targets(root)],
     }
-    command = [
-        "icacls", str(root), "/inheritance:r", "/grant:r",
-        f"*{sid}:(OI)(CI)(RX)",
+    commands = [
+        ["icacls", str(root), "/inheritance:r"],
+        ["icacls", str(root), "/remove:g", "*S-1-3-4", "*S-1-5-32-544"],
+        ["icacls", str(root), "/grant:r", f"*{sid}:(OI)(CI)(RX)"],
     ]
-    result = subprocess.run(command, capture_output=True, text=True)
-    evidence["set_acl_command"] = command
-    evidence["set_acl_exit_code"] = result.returncode
-    evidence["set_acl_stdout"] = result.stdout
-    evidence["set_acl_stderr"] = result.stderr
-    if result.returncode != 0:
-        restore_writable(root)
-        raise RuntimeError(f"Could not set temporary package ACL: {json.dumps(evidence, sort_keys=True)}")
+    command_results = []
+    for command in commands:
+        result = subprocess.run(command, capture_output=True, text=True)
+        command_results.append({
+            "command": command,
+            "exit_code": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        })
+        if result.returncode != 0:
+            evidence["set_acl_commands"] = command_results
+            restore_writable(root)
+            raise RuntimeError(f"Could not set temporary package ACL: {json.dumps(evidence, sort_keys=True)}")
+    evidence["set_acl_commands"] = command_results
 
     try:
         evidence["after_acl"] = [acl_snapshot(path) for path in acl_targets(root)]
