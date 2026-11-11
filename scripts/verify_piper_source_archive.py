@@ -45,7 +45,7 @@ def verify(archive_path, lock_path):
         if weight_files:
             raise ValueError(f"Model weights are forbidden in artifacts: {weight_files[:20]}")
 
-        manifest = json.loads(bundle.read("source-manifest.json"))
+        manifest = json.loads(bundle.read("source-manifest.json").decode("utf-8-sig"))
         records = {item["name"]: item for item in manifest.get("sources", [])}
         if set(records) != set(expected):
             raise ValueError(f"Source set mismatch: expected={sorted(expected)} actual={sorted(records)}")
@@ -55,8 +55,16 @@ def verify(archive_path, lock_path):
             record = records[name]
             if record.get("repository") != dependency["repository"] or record.get("commit") != dependency["commit"]:
                 raise ValueError(f"Lock mismatch for {name}")
-            if record.get("gitlinks") != []:
-                raise ValueError(f"Unpinned gitlinks recorded for {name}")
+            expected_gitlinks = {
+                item["path"]: {"repository": item["repository"], "commit": item["commit"]}
+                for item in dependency.get("submodules", [])
+            }
+            actual_gitlinks = {
+                item["path"]: {"repository": item["repository"], "commit": item["commit"]}
+                for item in record.get("gitlinks", [])
+            }
+            if actual_gitlinks != expected_gitlinks:
+                raise ValueError(f"Gitlink pin mismatch for {name}")
             archive_name = record.get("archive", "")
             if archive_name not in names:
                 raise ValueError(f"Missing source archive for {name}: {archive_name}")
@@ -80,7 +88,42 @@ def verify(archive_path, lock_path):
                 required = {"notices/onnxruntime/LICENSE", "notices/onnxruntime/ThirdPartyNotices.txt"}
                 if not required.issubset(names):
                     raise ValueError("ORT license and third-party notices are required")
-            checked.append({"name": name, "commit": dependency["commit"], "archive_sha256": record["sha256"]})
+            expected_submodules = {item["path"]: item for item in dependency.get("submodules", [])}
+            submodule_records = {item["path"]: item for item in record.get("submodules", [])}
+            if set(submodule_records) != set(expected_submodules):
+                raise ValueError(f"Nested source set mismatch for {name}")
+            checked_submodules = []
+            for path, pin in expected_submodules.items():
+                nested = submodule_records[path]
+                if nested.get("repository") != pin["repository"] or nested.get("commit") != pin["commit"]:
+                    raise ValueError(f"Nested source lock mismatch: {name}/{path}")
+                if nested.get("gitlinks") != []:
+                    raise ValueError(f"Unpinned deeper gitlink: {name}/{path}")
+                nested_archive = nested.get("archive", "")
+                if nested_archive not in names:
+                    raise ValueError(f"Missing nested source archive: {nested_archive}")
+                nested_data = bundle.read(nested_archive)
+                if len(nested_data) != nested.get("bytes") or _sha256(nested_data) != nested.get("sha256"):
+                    raise ValueError(f"Nested source archive hash mismatch: {name}/{path}")
+                with zipfile.ZipFile(io.BytesIO(nested_data)) as source:
+                    nested_names = {item for item in source.namelist() if not item.endswith("/")}
+                if not nested_names:
+                    raise ValueError(f"Empty nested source archive: {name}/{path}")
+                nested_weights = sorted(
+                    item for item in nested_names if PurePosixPath(item).suffix.lower() in WEIGHT_SUFFIXES
+                )
+                if nested_weights:
+                    raise ValueError(f"Nested source contains model weights ({name}/{path}): {nested_weights[:20]}")
+                nested_notices = nested.get("notices", [])
+                if not nested_notices or any(notice not in names for notice in nested_notices):
+                    raise ValueError(f"Missing nested license/notice files for {name}/{path}")
+                checked_submodules.append({"path": path, "commit": pin["commit"], "archive_sha256": nested["sha256"]})
+            checked.append({
+                "name": name,
+                "commit": dependency["commit"],
+                "archive_sha256": record["sha256"],
+                "submodules": checked_submodules,
+            })
 
     return {"verified_sources": checked, "weights_included": False}
 

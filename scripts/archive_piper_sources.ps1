@@ -17,9 +17,69 @@ foreach ($dependency in $lock.runtime.sources) {
     $actual = (& git -C $source rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0 -or $actual -ne $dependency.commit) { throw "Non-pinned source: $($dependency.name)" }
 
-    $gitlinks = @(& git -C $source ls-tree -r $dependency.commit | Where-Object { $_ -match '^160000 commit ' })
+    $treeLines = @(& git -C $source ls-tree -r $dependency.commit)
     if ($LASTEXITCODE -ne 0) { throw "Could not inspect gitlinks: $($dependency.name)" }
-    if ($gitlinks.Count -gt 0) { throw "Lock has no nested commit pins for $($dependency.name): $($gitlinks -join '; ')" }
+    $gitlinks = @()
+    foreach ($line in $treeLines) {
+        if ($line -match '^160000 commit ([0-9a-f]{40})\t(.+)$') {
+            $gitlinks += [pscustomobject]@{ commit = $matches[1]; path = $matches[2] }
+        }
+    }
+    $expectedSubmodules = @()
+    if ($null -ne $dependency.submodules) { $expectedSubmodules = @($dependency.submodules) }
+    $actualPaths = @($gitlinks | ForEach-Object { $_.path } | Sort-Object)
+    $expectedPaths = @($expectedSubmodules | ForEach-Object { $_.path } | Sort-Object)
+    if (($actualPaths -join "`n") -ne ($expectedPaths -join "`n")) {
+        throw "Gitlink path set differs from lock for $($dependency.name): $($actualPaths -join '; ')"
+    }
+    $gitlinkRecords = @($gitlinks | ForEach-Object {
+        $link = $_
+        $pin = @($expectedSubmodules | Where-Object { $_.path -eq $link.path })
+        if ($pin.Count -ne 1) { throw "Gitlink is not uniquely pinned: $($dependency.name)/$($link.path)" }
+        [ordered]@{ path = $link.path; repository = $pin[0].repository; commit = $link.commit }
+    })
+    $submoduleRecords = @()
+    foreach ($submodule in $expectedSubmodules) {
+        $gitlink = $gitlinks | Where-Object { $_.path -eq $submodule.path } | Select-Object -First 1
+        if (-not $gitlink -or $gitlink.commit -ne $submodule.commit) { throw "Gitlink commit mismatch: $($dependency.name)/$($submodule.path)" }
+        $configKey = "submodule.$($submodule.path).url"
+        $configuredUrl = (& git -C $source config -f .gitmodules --get $configKey).Trim()
+        if ($LASTEXITCODE -ne 0 -or $configuredUrl -ne $submodule.repository) { throw "Gitlink URL mismatch: $($dependency.name)/$($submodule.path)" }
+        & git -C $source submodule update --init --depth 1 -- $submodule.path
+        if ($LASTEXITCODE -ne 0) { throw "Submodule fetch failed: $($submodule.path)" }
+        $submoduleRoot = Join-Path $source $submodule.path
+        $submoduleHead = (& git -C $submoduleRoot rev-parse HEAD).Trim()
+        if ($LASTEXITCODE -ne 0 -or $submoduleHead -ne $submodule.commit) { throw "Submodule checkout mismatch: $($submodule.path)" }
+        $nestedLines = @(& git -C $submoduleRoot ls-tree -r $submodule.commit)
+        if ($LASTEXITCODE -ne 0) { throw "Could not inspect nested gitlinks: $($submodule.path)" }
+        if (@($nestedLines | Where-Object { $_ -match '^160000 commit ' }).Count -gt 0) { throw "Unpinned nested gitlink: $($submodule.path)" }
+
+        $leaf = ($submodule.path -split '/')[-1]
+        $subArchiveDir = Join-Path $sourcesDir "onnxruntime-submodules"
+        New-Item -ItemType Directory -Path $subArchiveDir -Force | Out-Null
+        $subArchiveName = "$leaf-$($submodule.commit).zip"
+        $subArchivePath = Join-Path $subArchiveDir $subArchiveName
+        & git -C $submoduleRoot archive --format=zip --output=$subArchivePath $submodule.commit "." ":(exclude,glob)**/*.onnx" ":(exclude,glob)**/*.ort"
+        if ($LASTEXITCODE -ne 0) { throw "Submodule source archive failed: $($submodule.path)" }
+
+        $subNoticeDir = Join-Path $noticesDir "onnxruntime-$leaf"
+        New-Item -ItemType Directory -Path $subNoticeDir -Force | Out-Null
+        $subLicenseFiles = @(Get-ChildItem -LiteralPath $submoduleRoot -File | Where-Object { $_.Name -match '^(LICENSE|COPYING|NOTICE|ThirdPartyNotices)' })
+        if ($subLicenseFiles.Count -eq 0) { throw "No top-level license/notice found for submodule: $($submodule.path)" }
+        foreach ($licenseFile in $subLicenseFiles) { Copy-Item -LiteralPath $licenseFile.FullName -Destination $subNoticeDir }
+        $subArchiveInfo = Get-Item -LiteralPath $subArchivePath
+        $submoduleRecords += [ordered]@{
+            path = $submodule.path
+            repository = $submodule.repository
+            commit = $submodule.commit
+            archive = "sources/onnxruntime-submodules/$subArchiveName"
+            bytes = $subArchiveInfo.Length
+            sha256 = (Get-FileHash -LiteralPath $subArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+            gitlinks = @()
+            notices = @($subLicenseFiles | ForEach-Object { "notices/onnxruntime-$leaf/$($_.Name)" })
+            excluded_model_files = @("**/*.onnx", "**/*.ort")
+        }
+    }
 
     $archiveName = "$($dependency.name)-$($dependency.commit).zip"
     $archivePath = Join-Path $sourcesDir $archiveName
@@ -43,12 +103,13 @@ foreach ($dependency in $lock.runtime.sources) {
         name = $dependency.name
         repository = $dependency.repository
         commit = $dependency.commit
-        gitlinks = @()
+        gitlinks = @($gitlinkRecords)
         archive = "sources/$archiveName"
         bytes = $archiveInfo.Length
         sha256 = $archiveHash
         notices = @($licenseFiles | ForEach-Object { "notices/$($dependency.name)/$($_.Name)" })
         excluded_model_files = @("**/*.onnx", "**/*.ort")
+        submodules = @($submoduleRecords)
     }
 }
 

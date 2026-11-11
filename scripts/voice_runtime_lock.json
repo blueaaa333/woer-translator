@@ -111,7 +111,39 @@
           "workflow_run": "https://github.com/blueaaa333/woer-translator/actions/runs/42976402088",
           "review_basis": "The official v1.14.1 release API asset name, URL, and 41,748,936-byte size matched the Windows CI HTTPS download; the release API publishes no digest."
         },
-        "status": "CI_OBSERVED_HASH_PINNED; UPSTREAM_RELEASE_API_DIGEST_UNPUBLISHED"
+        "status": "CI_OBSERVED_HASH_PINNED; UPSTREAM_RELEASE_API_DIGEST_UNPUBLISHED",
+        "submodules": [
+          {
+            "path": "cmake/external/eigen",
+            "repository": "https://gitlab.com/libeigen/eigen.git",
+            "commit": "d10b27fe37736d2944630ecd7557cefa95cf87c9"
+          },
+          {
+            "path": "cmake/external/emsdk",
+            "repository": "https://github.com/emscripten-core/emsdk.git",
+            "commit": "c220895fd1163c01f0a8b44229fb9e4fe0ae0958"
+          },
+          {
+            "path": "cmake/external/libprotobuf-mutator",
+            "repository": "https://github.com/google/libprotobuf-mutator.git",
+            "commit": "7a2ed51a6b682a83e345ff49fc4cfd7ca47550db"
+          },
+          {
+            "path": "cmake/external/onnx",
+            "repository": "https://github.com/onnx/onnx.git",
+            "commit": "9b7bca2a723ff94edcd007d93b5d0cf1838591dc"
+          },
+          {
+            "path": "cmake/external/onnxruntime-extensions",
+            "repository": "https://github.com/microsoft/onnxruntime-extensions.git",
+            "commit": "81e7799c69044c745239202085eb0a98f102937b"
+          },
+          {
+            "path": "cmake/external/protobuf",
+            "repository": "https://github.com/protocolbuffers/protobuf.git",
+            "commit": "a20c65f2cd549445fda907f7b83894c8eb7427d6"
+          }
+        ]
       },
       {
         "name": "fmt",
@@ -136,7 +168,7 @@
       "phonemize_onnxruntime": "Use only the pinned official 1.14.1 Windows x64 release archive after its SHA-256 is reviewed and filled",
       "fmt_spdlog": "Build from pinned source commits and pass their local install prefixes"
     },
-    "archive_scope": "Piper, piper-phonemize, eSpeak NG fork, fmt, spdlog source archives, ONNX Runtime source at exact commit, build scripts, lock and all notices. Runtime build must record gitlink/submodule SHAs and extracted binary asset SHA.",
+    "archive_scope": "Piper, piper-phonemize, eSpeak NG fork, fmt, spdlog, ONNX Runtime source at exact commits, and all six ORT gitlink sources with their exact commit SHAs, build scripts, lock and all notices.",
     "not_verified": [
       "A Windows compiler build of this source graph",
       "Corresponding-source completeness of the final staged runtime",

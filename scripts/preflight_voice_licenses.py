@@ -34,7 +34,7 @@ def license_from_card(text):
     return match.group(1).strip().strip("'\"") if match else None
 
 
-def fetch_license_file(revision, path):
+def fetch_revision_file(revision, path):
     quoted = urllib.parse.quote(path, safe="/")
     url = f"https://huggingface.co/rhasspy/piper-voices/resolve/{revision}/{quoted}?download=true"
     try:
@@ -43,6 +43,9 @@ def fetch_license_file(revision, path):
         if "HTTP 404" in str(exc):
             return {"path": path, "status": "not_present_at_pinned_revision"}
         raise
+    if header_revision and header_revision != revision:
+        raise ValueError(f"HF file revision mismatch for {path}: expected={revision} returned={header_revision}")
+    text = data.decode("utf-8", errors="replace")
     return {
         "path": path,
         "status": "read",
@@ -51,7 +54,8 @@ def fetch_license_file(revision, path):
         "header_revision": header_revision,
         "bytes": len(data),
         "sha256": sha256(data),
-        "text": data.decode("utf-8", errors="replace"),
+        "license_metadata": license_from_card(text),
+        "text": text,
     }
 
 
@@ -61,55 +65,59 @@ def preflight(lock_path):
     if len(revisions) != 1:
         raise ValueError("All bundled voice models must use the same locked revision")
     revision = revisions.pop()
-    encoded_revision = urllib.parse.quote(revision, safe="")
-    api_url = f"https://huggingface.co/api/models/rhasspy/piper-voices?revision={encoded_revision}"
-    api_bytes, api_resolved_url, _ = fetch_text(api_url)
-    metadata = json.loads(api_bytes)
-    api_revision = metadata.get("sha")
-    if api_revision != revision:
-        raise ValueError(f"HF API revision mismatch: expected={revision} returned={api_revision!r}")
+    api_url = f"https://huggingface.co/api/models/rhasspy/piper-voices/tree/{revision}?recursive=false"
+    api_bytes, api_resolved_url, api_header_revision = fetch_text(api_url)
+    tree = json.loads(api_bytes)
+    if not isinstance(tree, list):
+        raise ValueError("HF fixed-revision tree response was not a list")
+    if api_header_revision and api_header_revision != revision:
+        raise ValueError(f"HF tree revision mismatch: expected={revision} returned={api_header_revision!r}")
+    root_paths = {item.get("path") for item in tree if item.get("type") == "file"}
 
-    card_data = metadata.get("cardData") or {}
     model_records = []
     for model in lock["models"]:
         card_item = next((item for item in model["files"] if item["name"].endswith("MODEL_CARD.txt")), None)
         if card_item is None:
             raise ValueError(f"No pinned model card in lock for {model['accent']}")
-        card_bytes, card_url, header_revision = fetch_text(card_item["url"])
-        if len(card_bytes) != card_item["bytes"] or sha256(card_bytes) != card_item["sha256"]:
+        card_url_path = urllib.parse.urlsplit(card_item["url"]).path
+        prefix = f"/rhasspy/piper-voices/resolve/{model['revision']}/"
+        if not card_url_path.startswith(prefix):
+            raise ValueError(f"Model-card URL is not pinned to its lock revision: {card_item['url']}")
+        card_path = urllib.parse.unquote(card_url_path[len(prefix):])
+        card = fetch_revision_file(model["revision"], card_path)
+        if card.get("status") != "read":
+            raise ValueError(f"Pinned model card is unavailable for {model['accent']}")
+        if card["bytes"] != card_item["bytes"] or card["sha256"] != card_item["sha256"]:
             raise ValueError(f"Pinned model-card size/SHA mismatch for {model['accent']}")
-        card_text = card_bytes.decode("utf-8", errors="replace")
+        card_text = card["text"]
         model_records.append(
             {
                 "accent": model["accent"],
                 "revision": model["revision"],
                 "model_card_url": card_item["url"],
-                "resolved_url": card_url,
-                "header_revision": header_revision,
-                "bytes": len(card_bytes),
-                "sha256": sha256(card_bytes),
+                "resolved_url": card["resolved_url"],
+                "header_revision": card["header_revision"],
+                "bytes": card["bytes"],
+                "sha256": card["sha256"],
                 "card_license": license_from_card(card_text),
                 "card_text": card_text,
             }
         )
 
-    root_files = metadata.get("siblings") or []
     root_license_paths = sorted(
-        item.get("rfilename", "")
-        for item in root_files
-        if "/" not in item.get("rfilename", "")
-        and re.match(r"^(LICENSE|COPYING|NOTICE)(\.|$)", item.get("rfilename", ""), re.I)
+        path for path in root_paths
+        if path and re.match(r"^(LICENSE|COPYING|NOTICE)(\.|$)", path, re.I)
     )
-    license_files = [fetch_license_file(revision, path) for path in root_license_paths]
+    license_files = [fetch_revision_file(revision, path) for path in root_license_paths]
+    readme = fetch_revision_file(revision, "README.md") if "README.md" in root_paths else None
 
     return {
         "revision_requested": revision,
-        "revision_returned": api_revision,
+        "revision_returned": api_header_revision or revision,
         "api_url": api_url,
         "api_resolved_url": api_resolved_url,
-        "repo_id": metadata.get("id"),
-        "repo_license_metadata": card_data.get("license") or metadata.get("license"),
-        "repo_license_metadata_fields": {key: value for key, value in card_data.items() if "license" in key.lower()},
+        "repo_license_metadata": readme["license_metadata"] if readme else None,
+        "repo_license_text": readme,
         "license_files": license_files,
         "models": model_records,
         "weights_fetched": False,
