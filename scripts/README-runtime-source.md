@@ -19,12 +19,14 @@ from the archived build script and is not a separate untracked patch.
 
 The build also inspects the PE import table. If the binaries require MSVC CRT
 DLLs, the Windows validation artifact includes the unmodified files from that
-runner's Visual Studio 2022 `Microsoft.VC143.CRT` redistributable directory,
-its `redist.txt`, and `msvc-redist-evidence.json`. That report records the
-selected redist version and exact source directory, a SHA-256 for `redist.txt`,
-the official Microsoft Visual C++ Runtime 2015-2022 license URL and downloaded
-document hash, and the file version, SHA-256, and verified Microsoft
-Authenticode signer for each DLL.
+runner's Visual Studio 2022 `Microsoft.VC143.CRT` redistributable directory
+and `msvc-redist-evidence.json`. If the runner installation has `redist.txt`,
+the artifact copies it and records its SHA-256. If it does not, the artifact
+preserves an HTML snapshot and SHA-256 from Microsoft's official redistribution
+list page and records that the local file was absent. The report also records
+the selected redist version and exact source directory, the official Microsoft
+Visual C++ Runtime 2015-2022 license URL and downloaded document hash, and the
+file version, SHA-256, and verified Microsoft Authenticode signer for each DLL.
 
 Microsoft's official [Visual Studio 2022 redistribution list](https://learn.microsoft.com/visualstudio/releases/2022/redistribution)
 states that REDIST.txt is the distributable list referenced by the applicable

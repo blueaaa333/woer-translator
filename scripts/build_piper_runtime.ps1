@@ -86,14 +86,13 @@ function Find-MsvcCrtRedist([string]$VisualStudioPath) {
     if ($redistNoticeCandidates.Count -eq 0) {
         $redistNoticeCandidates = @(Get-ChildItem -LiteralPath $redistRoot -Filter "redist.txt" -File -Recurse | Sort-Object FullName)
     }
-    if ($redistNoticeCandidates.Count -eq 0) {
-        throw "MSVC CRT directory exists at $($crtFolder.FullName), but redist.txt is absent under $redistRoot"
-    }
+    $redistNotice = $null
+    if ($redistNoticeCandidates.Count -gt 0) { $redistNotice = $redistNoticeCandidates[0].FullName }
     return [pscustomobject]@{
         redist_root = $redistRoot
         version = $redistVersion
         crt_folder = $crtFolder.FullName
-        redist_notice = $redistNoticeCandidates[0].FullName
+        redist_notice = $redistNotice
     }
 }
 
@@ -127,8 +126,18 @@ function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
         Get-ChildItem -LiteralPath $crtFolder -File | Copy-Item -Destination $RuntimeOut -Force
         $noticeDir = Join-Path $OutputRoot "licenses/msvc-redist"
         New-Item -ItemType Directory -Path $noticeDir -Force | Out-Null
-        Copy-Item -LiteralPath $redistNotice -Destination (Join-Path $noticeDir "redist.txt") -Force
-        $redistNoticeHash = (Get-FileHash -LiteralPath $redistNotice -Algorithm SHA256).Hash.ToLowerInvariant()
+        $redistNoticeHash = $null
+        if ($redistNotice) {
+            Copy-Item -LiteralPath $redistNotice -Destination (Join-Path $noticeDir "redist.txt") -Force
+            $redistNoticeHash = (Get-FileHash -LiteralPath $redistNotice -Algorithm SHA256).Hash.ToLowerInvariant()
+        }
+        $redistributionListUrl = "https://learn.microsoft.com/en-us/visualstudio/releases/2022/redistribution"
+        $redistributionListPath = Join-Path $noticeDir "visual-studio-2022-redistribution.html"
+        Invoke-WebRequest -Uri $redistributionListUrl -OutFile $redistributionListPath
+        if ((Get-Item -LiteralPath $redistributionListPath).Length -lt 10000) {
+            throw "Microsoft Visual Studio 2022 redistribution list snapshot is unexpectedly small"
+        }
+        $redistributionListHash = (Get-FileHash -LiteralPath $redistributionListPath -Algorithm SHA256).Hash.ToLowerInvariant()
         $signedCrtFiles = @()
         foreach ($crtDll in (Get-ChildItem -LiteralPath $crtFolder -Filter "*.dll" -File)) {
             $signature = Get-AuthenticodeSignature -LiteralPath $crtDll.FullName
@@ -150,10 +159,12 @@ function Resolve-PeDependencies([string]$RuntimeOut, [string]$OutputRoot) {
             product = "Microsoft Visual C++ Runtime 2015-2022"
             visual_studio_redist_version = $redistVersion.Name
             source_directory = $crtFolder
+            redist_txt_present_in_installation = [bool]$redistNotice
             redist_txt_sha256 = $redistNoticeHash
             license_terms_url = $eulaUrl
             license_terms_sha256 = $eulaHash
-            visual_studio_2022_redistribution_list = "https://learn.microsoft.com/visualstudio/releases/2022/redistribution"
+            visual_studio_2022_redistribution_list_url = $redistributionListUrl
+            visual_studio_2022_redistribution_list_snapshot_sha256 = $redistributionListHash
             visual_c_redistribution_guidance = "https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files"
             signed_dlls = $signedCrtFiles
             note = "Microsoft REDIST.txt is the distributable list referenced by the applicable Visual Studio license terms; it is not itself the license. These files are Microsoft redistributables, not MIT/GPL components."
@@ -234,7 +245,8 @@ if ($Mode -eq "TestMsvcRedistDiscovery") {
     $vsInstall = (& $installer -latest -products '*' -property installationPath | Select-Object -First 1).Trim()
     if (-not $vsInstall) { throw "No Visual Studio installation was found" }
     $redist = Find-MsvcCrtRedist $vsInstall
-    Write-Output "MSVC CRT discovery passed; visual_studio=$vsInstall; redist_version=$($redist.version.Name); crt_folder=$($redist.crt_folder); redist_txt=$($redist.redist_notice)"
+        $noticeState = if ($redist.redist_notice) { $redist.redist_notice } else { "not-installed; use the official Microsoft redistribution-list source" }
+        Write-Output "MSVC CRT discovery passed; visual_studio=$vsInstall; redist_version=$($redist.version.Name); crt_folder=$($redist.crt_folder); redist_txt=$noticeState"
     exit 0
 }
 
