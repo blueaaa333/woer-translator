@@ -22,6 +22,11 @@ class DistributionTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as folder:
    root=Path(folder);self.fixture(root);(root/'voice.onnx').write_bytes(b'weights')
    with self.assertRaisesRegex(RuntimeError,'Unreviewed/private'):audit(root)
+ def test_app_local_msvc_crt_blocks_build(self):
+  with tempfile.TemporaryDirectory() as folder:
+   root=Path(folder);self.fixture(root);(root/'licenses'/'VCRUNTIME140.dll').write_bytes(b'CRT')
+   with self.assertRaisesRegex(RuntimeError,'Unreviewed/private'):
+    audit(root)
  def test_private_dictionary_blocks_build(self):
   with tempfile.TemporaryDirectory() as folder:
    root=Path(folder);self.fixture(root);con=sqlite3.connect(root/'words.db');con.execute("insert into words values ('private')");con.commit();con.close()

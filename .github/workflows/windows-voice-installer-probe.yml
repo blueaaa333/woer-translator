@@ -17,6 +17,9 @@ on:
       - scripts/verify_piper_source_archive.py
       - tests/run_windows_voice_installer_probe.ps1
       - tests/test_prepare_voice_bundle.py
+      - tests/test_distribution_audit.py
+      - packaging/windows.iss
+      - docs/SPEECH.md
   workflow_dispatch:
 permissions:
   contents: read

@@ -66,7 +66,7 @@ class PrepareVoiceBundleTests(unittest.TestCase):
             output = root / "package"
             result = prepare(runtime, models, license_report, output, lock_path=lock)
             self.assertEqual(result["speech_payload"]["files"], 7)
-            self.assertFalse(result["crt"]["test_only"])
+            self.assertFalse(result["crt"]["bundled"])
             self.assertEqual(audit_embedded_voice_payload(output)["files"], 7)
 
     def test_extra_or_modified_voice_file_fails_closed(self):
@@ -80,21 +80,30 @@ class PrepareVoiceBundleTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "extra=.*unlocked.onnx"):
                 audit_embedded_voice_payload(output)
 
-    def test_runner_crt_is_explicitly_test_only_and_hash_locked(self):
+    def test_msvc_crt_is_rejected_from_runtime_manifest(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             runtime, models, lock, license_report = self.inputs(root)
-            crt = root / "runner-redist"
-            names = ("VCRUNTIME140.dll", "VCRUNTIME140_1.dll", "MSVCP140.dll")
-            for name in names:
-                put(crt / name, (name + " fixture").encode())
+            crt = runtime / "speech" / "runtime" / "piper" / "VCRUNTIME140.dll"
+            runtime_item = put(crt, b"runner crt fixture")
+            runtime_item["path"] = "speech/runtime/piper/VCRUNTIME140.dll"
+            manifest_path = runtime / "runtime-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["files"].append(runtime_item)
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "MSVC CRT must come from"):
+                prepare(runtime, models, license_report, root / "package", lock_path=lock)
+
+    def test_unlisted_msvc_crt_is_rejected_from_stage(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime, models, lock, license_report = self.inputs(root)
             output = root / "package"
-            result = prepare(runtime, models, license_report, output, crt_source=crt, lock_path=lock)
-            self.assertTrue(result["crt"]["test_only"])
-            self.assertEqual(len(result["crt"]["files"]), 3)
-            self.assertEqual(audit_embedded_voice_payload(output)["files"], 10)
-            for item in result["crt"]["files"]:
-                self.assertEqual(item["sha256"], sha256(output / "speech" / "runtime" / "piper" / item["name"]))
+            prepare(runtime, models, license_report, output, lock_path=lock)
+            crt = output / "speech" / "runtime" / "piper" / "MSVCP140.dll"
+            crt.write_bytes(b"unlisted runner crt fixture")
+            with self.assertRaisesRegex(ValueError, "MSVC CRT must not be bundled"):
+                audit_embedded_voice_payload(output)
 
 
 if __name__ == "__main__":

@@ -24,7 +24,9 @@ Mac 版使用系统自带 `/usr/bin/say` 和 `/usr/bin/afplay`，按语言区域
 
 新包英式使用 `en_GB-cori-high`，美式使用 `en_US-kristin-medium`；两个按钮调用不同模型，并保留各模型原始的音素前端配置。不能仅凭 language.code 把 espeak.voice 强改成另一名称，否则可能与模型训练时的音素系统不匹配。旧的 Cori Medium / LJSpeech Medium 文件继续作为兼容回退，不被覆盖。它们是本机合成语音，不能保证所有专名、多音词或上下文中的重音都准确。
 
-源码和桌面安装包不附带 Piper 二进制、eSpeak NG、ONNX Runtime 或模型权重。用户在软件菜单选择“下载英美离线语音”或执行 `python scripts/setup_speech.py` 后，才直接从上游下载，并核对固定 SHA-256。模型采用固定 Hugging Face 提交，运行时固定 Piper 2023.11.14-2 发布文件，具体见 `scripts/speech-downloads.json`。安装包下载到本机用户数据目录，源码脚本默认下载到源码目录。
+现有正式发行版仍按需从上游下载语音资源。本测试分支的 Windows 候选安装包改为预装固定 SHA-256 校验的英式、美式模型及由锁定源码构建的 Piper runtime；安装后本地合成不再访问模型或 runtime 下载源。候选包要求系统已安装与构建版本兼容的 Microsoft Visual C++ x64 Runtime。若缺少或版本过低，安装程序会在改动安装目录前提示用户从微软官方页面单独安装；候选安装程序不会联网代下载或分发该运行库。此行为尚未进入正式发行版。
+
+模型采用固定 Hugging Face 提交，锁定运行时及来源见 `scripts/voice_runtime_lock.json`、`scripts/build_piper_runtime.ps1` 和 `scripts/archive_piper_sources.ps1`。手动语音下载入口仍保留给旧安装或开发环境。
 
 - [Piper 发布](https://github.com/rhasspy/piper/releases/tag/2023.11.14-2)
 - [Piper 源码与 MIT 许可](https://github.com/rhasspy/piper/tree/2023.11.14-2)

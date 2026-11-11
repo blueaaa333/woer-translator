@@ -5,6 +5,7 @@ REQUIRED=('IAccessible2-BSD.txt','WordNet-LICENSE.txt','COW-LICENSE.txt','CC-BY-
 NATIVE=('Python-LICENSE.txt','CPython-incorporated-software.rst','OpenSSL-LICENSE.txt','zlib-LICENSE.txt','Expat-LICENSE.txt','libmpdec-NOTICE.txt','libffi-LICENSE.txt','bzip2-LICENSE.txt','XZ-liblzma-COPYING.txt','tcl-license.terms','tk-license.terms')
 ECDICT_COMMIT='39cfb9672c0906b63569e0453c2e6abfb9ab182a'
 ECDICT_SOURCE_SHA256='d1ecbdf9ee2b920afb6f430ca6b6bb9f559588cf0dff86e04bd255f9390843cc'
+MSVC_CRT_NAMES=frozenset({'vcruntime140.dll','vcruntime140_1.dll','msvcp140.dll'})
 
 def audit(base):
     base=Path(base);licenses=base/'licenses';runtime=licenses/'runtime'
@@ -32,7 +33,9 @@ def audit(base):
             seen.add(resolved);count+=1
             name=path.name.lower()
             restricted=path.suffix.lower() in ('.pdf','.onnx','.wav','.mp3','.ogg','.oga','.ttf','.otf','.woff','.woff2') or name in ('exam_core.db','preferences.json','生词本.txt','piper.exe')
-            if restricted and resolved not in allowed_voice_paths:
+            if name in MSVC_CRT_NAMES:
+                forbidden.append(str(path.relative_to(root)))
+            elif restricted and resolved not in allowed_voice_paths:
                 forbidden.append(str(path.relative_to(root)))
     if forbidden:raise RuntimeError('Unreviewed/private distribution files: '+', '.join(forbidden))
     manifest_path=base/'ecdict-manifest.json'

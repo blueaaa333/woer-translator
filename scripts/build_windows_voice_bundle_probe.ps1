@@ -6,77 +6,84 @@ $licenseReport = Join-Path $root "build/voice-licensing/voice-license-preflight.
 $bundleRoot = Join-Path $root "build/voice-package"
 $reportRoot = Join-Path $root "build/voice-package-review"
 $dependencyReport = Join-Path $runtimeRoot "runtime-dependency-report.json"
-$eula = Join-Path $env:RUNNER_TEMP "Microsoft-Visual-C-Runtime-2015-2022-License.docx"
+$systemCrtReport = Join-Path $reportRoot "system-crt-prerequisite.json"
+$officialRuntimeUrl = "https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170"
 
-foreach ($required in @($dependencyReport,$licenseReport,$eula,(Join-Path $modelRoot "speech/voices/uk/dictionary-voice.onnx"),
+foreach ($required in @($dependencyReport,$licenseReport,(Join-Path $modelRoot "speech/voices/uk/dictionary-voice.onnx"),
     (Join-Path $modelRoot "speech/voices/us/dictionary-voice.onnx"))) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Required pinned build input is missing: $required" }
 }
 $dependency = Get-Content -LiteralPath $dependencyReport -Raw | ConvertFrom-Json
-$crtSource = $dependency.runner_msvc_redist_directory
-if (-not $crtSource -or -not (Test-Path -LiteralPath $crtSource -PathType Container)) {
-    throw "Probe build cannot locate the exact runner CRT directory in runtime-dependency-report.json"
+$buildCrt = @($dependency.msvc_redist_files | Where-Object { $_.name -ieq "VCRUNTIME140.dll" } | Select-Object -First 1)
+if ($buildCrt.Count -ne 1 -or -not $buildCrt[0].file_version) {
+    throw "The runtime build report lacks the exact VCRUNTIME140.dll version used by the MSVC toolset"
 }
+$minimumRuntimeVersion = [Version]$buildCrt[0].file_version
+$system32 = Join-Path $env:SystemRoot "System32"
 $crtNames = @("VCRUNTIME140.dll", "VCRUNTIME140_1.dll", "MSVCP140.dll")
-$crtRecords = @()
+$systemCrtRecords = @()
 foreach ($name in $crtNames) {
-    $path = Join-Path $crtSource $name
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Runner CRT directory lacks required import: $name" }
+    $path = Join-Path $system32 $name
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "The runner does not have the required x64 system CRT file: $path"
+    }
     $signature = Get-AuthenticodeSignature -LiteralPath $path
     $subject = if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { "" }
     if ($signature.Status -ne "Valid" -or $subject -notmatch '(?i)(?:^|,\s*)(?:CN|O)=Microsoft Corporation(?:,|$)') {
-        throw "Runner CRT signature is not valid Microsoft Authenticode: $name ($($signature.Status)) $subject"
+        throw "System CRT signature is not valid Microsoft Authenticode: $name ($($signature.Status)) $subject"
     }
     $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($path)
-    $crtRecords += [ordered]@{
+    $fileVersion = [Version]$info.FileVersion
+    if ($fileVersion -lt $minimumRuntimeVersion) {
+        throw "System CRT is older than the runtime used to build Piper: $name $fileVersion < $minimumRuntimeVersion"
+    }
+    $systemCrtRecords += [ordered]@{
         name = $name; path = $path; bytes = (Get-Item -LiteralPath $path).Length
         sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
         file_version = $info.FileVersion; signature = [string]$signature.Status; signer = $subject
     }
 }
-$redistNotice = Join-Path $runtimeRoot "licenses/msvc-redist/redist.txt"
-$redistEvidencePath = Join-Path $runtimeRoot "licenses/msvc-redist/msvc-redist-evidence.json"
-if (-not (Test-Path -LiteralPath $redistEvidencePath -PathType Leaf)) {
-    throw "The Microsoft CRT source evidence is missing from the runtime build output"
-}
-$redistEvidence = Get-Content -LiteralPath $redistEvidencePath -Raw | ConvertFrom-Json
-$redistNoticePresent = Test-Path -LiteralPath $redistNotice -PathType Leaf
-$redistNoticeHash = $null
-if ($redistNoticePresent) {
-    $redistNoticeHash = (Get-FileHash -LiteralPath $redistNotice -Algorithm SHA256).Hash.ToLowerInvariant()
-}
-if ([bool]$redistEvidence.redist_txt_present_in_installation -ne [bool]$redistNoticePresent) {
-    throw "Staged redist.txt presence does not match msvc-redist-evidence.json"
-}
-if ($redistNoticeHash -and $redistEvidence.redist_txt_sha256 -and
-    $redistNoticeHash -ne [string]$redistEvidence.redist_txt_sha256) {
-    throw "Staged redist.txt hash does not match msvc-redist-evidence.json"
-}
 New-Item -ItemType Directory -Path $reportRoot -Force | Out-Null
 ([ordered]@{
     tested_only = $true
-    visual_studio_redist_version = $dependency.visual_studio_redist_version
-    runner_redist_directory = $crtSource
-    redist_txt_present_in_installation = [bool]$redistNoticePresent
-    redist_txt_sha256 = $redistNoticeHash
-    eula_source = "https://visualstudio.microsoft.com/wp-content/uploads/2021/09/Visual-C-Runtime-2015-2022-License-1.docx"
-    eula_sha256 = (Get-FileHash -LiteralPath $eula -Algorithm SHA256).Hash.ToLowerInvariant()
-    visual_studio_2022_redistribution_list_url = $redistEvidence.visual_studio_2022_redistribution_list_url
-    visual_studio_2022_redistribution_list_snapshot_sha256 = $redistEvidence.visual_studio_2022_redistribution_list_snapshot_sha256
-    msvc_redist_evidence_sha256 = (Get-FileHash -LiteralPath $redistEvidencePath -Algorithm SHA256).Hash.ToLowerInvariant()
-    files = $crtRecords
-    redistribution_rights = "not established by this CI package probe"
-} | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath (Join-Path $reportRoot "crt-source-inspection.json") -Encoding UTF8
+    system_crt_root = $system32
+    minimum_runtime_version_from_build = $minimumRuntimeVersion.ToString()
+    files = $systemCrtRecords
+    prerequisite_url = $officialRuntimeUrl
+    note = "No CRT DLL or vc_redist installer is copied into the candidate package."
+} | ConvertTo-Json -Depth 8) | Set-Content -LiteralPath $systemCrtReport -Encoding UTF8
 
-python scripts/prepare_voice_bundle.py --runtime-root $runtimeRoot --model-root $modelRoot `
-    --license-report $licenseReport --output-root $bundleRoot --crt-source $crtSource --crt-eula $eula `
-    --lock scripts/voice_runtime_lock.json --report (Join-Path $reportRoot "voice-bundle.json")
+$prepareArgs = @("scripts/prepare_voice_bundle.py", "--runtime-root", $runtimeRoot, "--model-root", $modelRoot,
+    "--license-report", $licenseReport, "--output-root", $bundleRoot, "--lock", "scripts/voice_runtime_lock.json",
+    "--report", (Join-Path $reportRoot "voice-bundle.json"))
+python @prepareArgs
 if ($LASTEXITCODE -ne 0) { throw "Locked voice bundle staging failed: $LASTEXITCODE" }
-python scripts/build_release.py --voice-bundle-root $bundleRoot --skip-portable --allow-test-only-crt
+$releaseArgs = @("scripts/build_release.py", "--voice-bundle-root", $bundleRoot,
+    "--minimum-msvc-runtime-version", $minimumRuntimeVersion.ToString(), "--skip-portable")
+python @releaseArgs
 if ($LASTEXITCODE -ne 0) { throw "Windows voice installer build failed: $LASTEXITCODE" }
 
-$setup = Join-Path $root "release-assets/WoerTranslator-0.3.22-Windows-x64-Setup.exe"
-if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) { throw "Inno Setup did not create the candidate installer" }
-$probeScript = Join-Path $root "tests/run_windows_voice_installer_probe.ps1"
-& $probeScript -CandidateSetup $setup -ReportRoot $reportRoot
+$programFilesX86 = [Environment]::ExpandEnvironmentVariables("%ProgramFiles(x86)%")
+$compiler = Join-Path $programFilesX86 "Inno Setup 6/ISCC.exe"
+if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) { throw "Inno Setup compiler is missing: $compiler" }
+$iss = Join-Path $root "packaging/windows.iss"
+$version = (Get-Content -LiteralPath (Join-Path $root "VERSION") -Raw).Trim()
+$requiredParts = $minimumRuntimeVersion.ToString().Split(".")
+$minimumArgs = @()
+$minimumNames = @("Major", "Minor", "Build", "Revision")
+for ($i = 0; $i -lt 4; $i++) { $minimumArgs += "/DMsvcRuntimeMinimum$($minimumNames[$i])=$($requiredParts[$i])" }
+$fixtureCommon = @("/DAppVersion=$version", "/DRequireMsvcRuntime=1", "/DProbeInstaller=1") + $minimumArgs
+$missingArgs = $fixtureCommon + @("/DProbeForceMissingMsvcRuntime=1", $iss)
+& $compiler @missingArgs
+if ($LASTEXITCODE -ne 0) { throw "Inno missing-CRT fixture compile failed: $LASTEXITCODE" }
+$oldArgs = @("/DAppVersion=$version", "/DRequireMsvcRuntime=1", "/DProbeInstaller=1",
+    "/DProbeForceMissingMsvcRuntime=0", "/DMsvcRuntimeMinimumMajor=99", "/DMsvcRuntimeMinimumMinor=0",
+    "/DMsvcRuntimeMinimumBuild=0", "/DMsvcRuntimeMinimumRevision=0", $iss)
+& $compiler @oldArgs
+if ($LASTEXITCODE -ne 0) { throw "Inno too-old-CRT fixture compile failed: $LASTEXITCODE" }
 
+$candidateSetup = Join-Path $root "release-assets/WoerTranslator-$version-Windows-x64-Setup.exe"
+$missingSetup = Join-Path $root "release-assets/WoerTranslator-MsvcRuntime-Missing-Probe.exe"
+$tooOldSetup = Join-Path $root "release-assets/WoerTranslator-MsvcRuntime-TooOld-Probe.exe"
+$probeScript = Join-Path $root "tests/run_windows_voice_installer_probe.ps1"
+& $probeScript -CandidateSetup $candidateSetup -MissingRuntimeSetup $missingSetup -TooOldRuntimeSetup $tooOldSetup -MinimumRuntimeVersion $minimumRuntimeVersion.ToString() -ReportRoot $reportRoot

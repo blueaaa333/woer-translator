@@ -7,7 +7,7 @@ import json
 import shutil
 from pathlib import Path
 
-CRT_NAMES = ("VCRUNTIME140.dll", "VCRUNTIME140_1.dll", "MSVCP140.dll")
+CRT_NAMES = frozenset({"vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll"})
 
 
 def sha256(path: Path) -> str:
@@ -38,6 +38,8 @@ def verify_speech_tree(root: Path, lock: dict, runtime_manifest: dict) -> dict:
         rel = Path(item["path"])
         if rel.is_absolute() or ".." in rel.parts or rel.as_posix() in expected:
             raise ValueError(f"Invalid or duplicate runtime path: {item['path']}")
+        if rel.name.lower() in CRT_NAMES:
+            raise ValueError(f"MSVC CRT must come from the installed x64 system runtime: {item['path']}")
         expected[rel.as_posix()] = (item["bytes"], item["sha256"])
 
     speech = root / "speech"
@@ -46,6 +48,9 @@ def verify_speech_tree(root: Path, lock: dict, runtime_manifest: dict) -> dict:
         for path in speech.rglob("*")
         if path.is_file()
     }
+    bundled_crt = sorted(rel for rel, path in actual.items() if path.name.lower() in CRT_NAMES)
+    if bundled_crt:
+        raise ValueError(f"MSVC CRT must not be bundled: {bundled_crt}")
     missing = sorted(set(expected) - set(actual))
     extra = sorted(set(actual) - set(expected))
     if missing or extra:
@@ -102,8 +107,7 @@ def _copy_license_evidence(report_path: Path, destination: Path) -> dict:
 
 
 def prepare(runtime_root: Path, model_root: Path, license_report: Path,
-            output_root: Path, crt_source: Path | None = None,
-            crt_eula: Path | None = None, lock_path: Path | None = None) -> dict:
+            output_root: Path, lock_path: Path | None = None) -> dict:
     runtime_root = Path(runtime_root).resolve()
     model_root = Path(model_root).resolve()
     output_root = Path(output_root).resolve()
@@ -135,27 +139,6 @@ def prepare(runtime_root: Path, model_root: Path, license_report: Path,
         if (not card or not evidence or evidence.get("revision") != model["revision"]
                 or evidence.get("bytes") != card["bytes"] or evidence.get("sha256") != card["sha256"]):
             raise ValueError(f"Pinned license evidence does not match {model['accent']} model card")
-    crt_records = []
-    if crt_source is not None:
-        crt_source = Path(crt_source)
-        runtime_dir = speech / "runtime" / "piper"
-        for name in CRT_NAMES:
-            source = crt_source / name
-            if not source.is_file():
-                raise FileNotFoundError(f"Runner CRT probe source lacks required DLL: {source}")
-            target = runtime_dir / name
-            shutil.copy2(source, target)
-            record = {"name": name, "path": f"speech/runtime/piper/{name}",
-                      "bytes": target.stat().st_size, "sha256": sha256(target),
-                      "source": str(source)}
-            crt_records.append(record)
-            runtime_manifest["files"].append({
-                "path": record["path"], "bytes": record["bytes"], "sha256": record["sha256"]
-            })
-        if crt_eula is not None:
-            crt_dir = license_root / "msvc-crt-test-only"
-            crt_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(crt_eula, crt_dir / "Microsoft-VC-Runtime-EULA.docx")
     (license_root / "runtime-manifest.json").write_text(
         json.dumps(runtime_manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -177,8 +160,7 @@ def prepare(runtime_root: Path, model_root: Path, license_report: Path,
             "sha256": sha256(license_root / source_archive.name),
         },
         "source_manifest_sha256": sha256(license_root / source_manifest.name),
-        "crt": {"test_only": bool(crt_records), "files": crt_records,
-                "redistribution_rights": "not established by this package probe"},
+        "crt": {"bundled": False, "required_system_files": sorted(CRT_NAMES)},
     }
     (license_root / "package-manifest.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -237,13 +219,11 @@ def main() -> None:
     parser.add_argument("--model-root", type=Path, required=True)
     parser.add_argument("--license-report", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
-    parser.add_argument("--crt-source", type=Path)
-    parser.add_argument("--crt-eula", type=Path)
     parser.add_argument("--lock", type=Path)
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
     summary = prepare(args.runtime_root, args.model_root, args.license_report,
-                      args.output_root, args.crt_source, args.crt_eula, args.lock)
+                      args.output_root, args.lock)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"passed": True, "summary": summary}, sort_keys=True))

@@ -1,5 +1,8 @@
 param(
     [Parameter(Mandatory=$true)][string]$CandidateSetup,
+    [Parameter(Mandatory=$true)][string]$MissingRuntimeSetup,
+    [Parameter(Mandatory=$true)][string]$TooOldRuntimeSetup,
+    [Parameter(Mandatory=$true)][string]$MinimumRuntimeVersion,
     [Parameter(Mandatory=$false)][string]$ReportRoot = "build/voice-package-review"
 )
 $ErrorActionPreference = "Stop"
@@ -19,21 +22,24 @@ function Get-Sha256([string]$Path) {
 
 function Get-CrtRecords([string]$Root) {
     $names = @("VCRUNTIME140.dll", "VCRUNTIME140_1.dll", "MSVCP140.dll")
+    $lowerNames = @($names | ForEach-Object { $_.ToLowerInvariant() })
     $records = @()
     if (-not (Test-Path -LiteralPath $Root -PathType Container)) { return $records }
-    foreach ($name in $names) {
-        foreach ($file in @(Get-ChildItem -LiteralPath $Root -Filter $name -File -Recurse -ErrorAction SilentlyContinue)) {
-            $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName
-            $subject = if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { "" }
-            $records += [ordered]@{
-                name = $file.Name
-                path = $file.FullName
-                bytes = $file.Length
-                sha256 = Get-Sha256 $file.FullName
-                file_version = [Diagnostics.FileVersionInfo]::GetVersionInfo($file.FullName).FileVersion
-                signature_status = [string]$signature.Status
-                signer = $subject
-            }
+    foreach ($file in @(Get-ChildItem -LiteralPath $Root -File -Recurse -Force -ErrorAction SilentlyContinue)) {
+        $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($file.FullName)
+        $original = if ($info.OriginalFilename) { [IO.Path]::GetFileName($info.OriginalFilename).ToLowerInvariant() } else { "" }
+        if ($lowerNames -notcontains $file.Name.ToLowerInvariant() -and $lowerNames -notcontains $original) { continue }
+        $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName
+        $subject = if ($signature.SignerCertificate) { $signature.SignerCertificate.Subject } else { "" }
+        $records += [ordered]@{
+            name = $file.Name
+            original_filename = $info.OriginalFilename
+            path = $file.FullName
+            bytes = $file.Length
+            sha256 = Get-Sha256 $file.FullName
+            file_version = $info.FileVersion
+            signature_status = [string]$signature.Status
+            signer = $subject
         }
     }
     return $records
@@ -141,28 +147,35 @@ function Invoke-AppVoiceSmoke([string]$Exe, [string]$LocalData, [string]$Label) 
     $result = Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json
     if (-not $result.passed) { throw "Packaged voice render failed: $($result.error)" }
     $loaded = @()
-    $runtimeDllDirectory = [IO.Path]::GetFullPath((Join-Path $result.resource_root "speech\runtime\piper"))
+    $systemCrtDirectory = [IO.Path]::GetFullPath((Join-Path $env:SystemRoot "System32")).TrimEnd("\") + "\"
+    $processes = @([ordered]@{ role = "frozen-app"; process = $process })
     foreach ($voice in @($result.voices.uk, $result.voices.us)) {
         if (-not $voice.piper_pid) { throw "Missing Piper PID in packaged render report" }
-        $piper = Get-Process -Id ([int]$voice.piper_pid)
-        foreach ($module in @($piper.Modules | Where-Object { $_.ModuleName -match '^(VCRUNTIME140(_1)?|MSVCP140)\.dll$' })) {
-            if ($module.FileName -match '(?i)\\Microsoft Visual Studio\\|\\VC\\Tools\\MSVC\\') {
-                throw "Piper loaded CRT through Visual Studio PATH: $($module.FileName)"
+        $processes += [ordered]@{ role = "piper-$($voice.accent)"; process = (Get-Process -Id ([int]$voice.piper_pid)) }
+    }
+    foreach ($entry in $processes) {
+        foreach ($module in @($entry.process.Modules | Where-Object { $_.ModuleName -match '^(VCRUNTIME140(_1)?|MSVCP140)\.dll$' })) {
+            if (-not $module.FileName.StartsWith($systemCrtDirectory, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "$($entry.role) loaded CRT outside the system x64 runtime directory: $($module.FileName)"
             }
-            if (-not $module.FileName.StartsWith($runtimeDllDirectory, [StringComparison]::OrdinalIgnoreCase)) {
-                throw "Piper did not load app-local CRT from its runtime directory: $($module.FileName)"
+            $loaded += [ordered]@{
+                role = $entry.role; process_id = $entry.process.Id; module = $module.ModuleName
+                path = $module.FileName; bytes = (Get-Item -LiteralPath $module.FileName).Length
+                sha256 = Get-Sha256 $module.FileName
+                file_version = [Diagnostics.FileVersionInfo]::GetVersionInfo($module.FileName).FileVersion
+                signature_status = [string](Get-AuthenticodeSignature -LiteralPath $module.FileName).Status
             }
-            $loaded += [ordered]@{ piper_pid = $voice.piper_pid; module = $module.ModuleName; path = $module.FileName; sha256 = Get-Sha256 $module.FileName }
         }
     }
     $expectedCrt = @("VCRUNTIME140.dll", "MSVCP140.dll")
     $loadedNames = @($loaded | ForEach-Object { $_["module"] } | Select-Object -Unique)
     $missingLoaded = @($expectedCrt | Where-Object { $_ -notin $loadedNames })
-    if ($missingLoaded.Count) { throw "Piper did not report loaded CRT modules: $($missingLoaded -join ', ')" }
+    if ($missingLoaded.Count) { throw "Frozen app or Piper did not report loaded system CRT modules: $($missingLoaded -join ', ')" }
     Set-Content -LiteralPath $marker -Value "inspected" -Encoding ASCII
     $process.WaitForExit()
     if ($process.ExitCode -ne 0) { throw "Packaged voice self-test exited $($process.ExitCode)" }
     $result | Add-Member -NotePropertyName crt_modules_loaded -NotePropertyValue $loaded -Force
+    $result | Add-Member -NotePropertyName system_crt_directory -NotePropertyValue $systemCrtDirectory.TrimEnd("\") -Force
     $result | Add-Member -NotePropertyName visual_studio_path_removed -NotePropertyValue $true -Force
     $result | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $report -Encoding UTF8
     return $result
@@ -211,18 +224,69 @@ function Write-Json([string]$Path, $Value) {
     $Value | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $Path -Encoding UTF8
 }
 
+function Assert-BlockedPrerequisiteSetup([string]$SetupPath, [string]$Label, [bool]$Interactive,
+    [string]$ExistingInstallRoot = "", [string]$ExpectedExistingExeSha256 = "") {
+    if (-not (Test-Path -LiteralPath $SetupPath -PathType Leaf)) { throw "Prerequisite fixture installer is missing: $SetupPath" }
+    $destination = if ($ExistingInstallRoot) { [IO.Path]::GetFullPath($ExistingInstallRoot) } else { Join-Path $testRoot "$Label-install" }
+    $existingExe = Join-Path $destination "WoerTranslator.exe"
+    $beforeExeHash = if (Test-Path -LiteralPath $existingExe -PathType Leaf) { Get-Sha256 $existingExe } else { "" }
+    if ($ExpectedExistingExeSha256 -and $beforeExeHash -ne $ExpectedExistingExeSha256) {
+        throw "$Label fixture did not start from the expected existing installation"
+    }
+    $log = Join-Path $resolvedReportRoot "$Label-inno.log"
+    $arguments = @("/LOG=`"$log`"", "/DIR=`"$destination`"")
+    if (-not $Interactive) { $arguments += @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-") }
+    $installer = Start-Process -FilePath $SetupPath -ArgumentList $arguments -PassThru
+    $deadline = [DateTime]::UtcNow.AddSeconds(30)
+    $sentEnter = $false
+    while (-not $installer.HasExited -and [DateTime]::UtcNow -lt $deadline) {
+        $installer.Refresh()
+        if ($Interactive -and -not $sentEnter -and $installer.MainWindowHandle -ne [IntPtr]::Zero) {
+            $shell = New-Object -ComObject WScript.Shell
+            [void]$shell.AppActivate($installer.Id)
+            Add-Type -AssemblyName System.Windows.Forms
+            [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+            $sentEnter = $true
+        }
+        Start-Sleep -Milliseconds 250
+    }
+    if (-not $installer.HasExited) {
+        Stop-Process -Id $installer.Id -Force
+        throw "$Label prerequisite installer did not exit after the blocking check"
+    }
+    if ($installer.ExitCode -eq 0) { throw "$Label prerequisite installer unexpectedly succeeded" }
+    if ($ExpectedExistingExeSha256) {
+        if (-not (Test-Path -LiteralPath $existingExe -PathType Leaf) -or (Get-Sha256 $existingExe) -ne $beforeExeHash) {
+            throw "$Label prerequisite installer changed the existing application before blocking"
+        }
+    } elseif (Test-Path -LiteralPath $existingExe -PathType Leaf) {
+        throw "$Label prerequisite installer modified the destination before blocking"
+    }
+    $logText = if (Test-Path -LiteralPath $log -PathType Leaf) { Get-Content -LiteralPath $log -Raw } else { "" }
+    if ($logText -notmatch "MSVC x64 prerequisite failed") { throw "$Label installer log did not record the CRT prerequisite block" }
+    return [ordered]@{
+        blocked = $true; interactive = $Interactive; exit_code = $installer.ExitCode
+        destination_created = (Test-Path -LiteralPath $destination)
+        inno_log = $log; message_logged = $true; enter_sent = $sentEnter
+    }
+}
+
 $candidateInfo = Get-Item -LiteralPath $resolvedSetup
 $sizeLimit = 419430400
 if ($candidateInfo.Length -gt $sizeLimit) { throw "Candidate installer exceeds the existing updater cap: $($candidateInfo.Length)" }
 $candidateHash = Get-Sha256 $resolvedSetup
 $candidateRoot = Join-Path (Split-Path -Parent $resolvedSetup) "..\dist\WoerTranslator"
 $candidateCrt = Get-CrtRecords ([IO.Path]::GetFullPath($candidateRoot))
+if ($candidateCrt.Count -gt 0) { throw "Candidate PyInstaller tree still contains MSVC CRT copies: $($candidateCrt.path -join ', ')" }
+$missingPrerequisite = Assert-BlockedPrerequisiteSetup $MissingRuntimeSetup "missing-runtime" $true
 
 $appRoot = Join-Path $testRoot "安装 Space\Programs\WoerTranslator"
 $firstData = Join-Path $testRoot "first-local-app-data"
 New-Item -ItemType Directory -Path $firstData,(Split-Path -Parent $appRoot) -Force | Out-Null
 $env:LOCALAPPDATA = $firstData
 Install-Setup $resolvedSetup $appRoot
+$firstInstalledCrt = Get-CrtRecords $appRoot
+if ($firstInstalledCrt.Count -gt 0) { throw "First install contains app-local MSVC CRT copies: $($firstInstalledCrt.path -join ', ')" }
 Set-InstallTreeAccess $appRoot "ReadOnly"
 $firstReadOnly = Assert-ReadOnly $appRoot
 $firstAcl = [ordered]@{ root = Get-AclRecord $appRoot; voice_directory = Get-AclRecord (Split-Path -Parent $firstReadOnly.model) }
@@ -261,6 +325,7 @@ Install-Setup $oldInstaller $appRoot
 $oldCrt = Get-CrtRecords $appRoot
 $oldAppExe = Join-Path $appRoot "WoerTranslator.exe"
 $oldAppHash = Get-Sha256 $oldAppExe
+$tooOldPrerequisite = Assert-BlockedPrerequisiteSetup $TooOldRuntimeSetup "too-old-runtime" $false $appRoot $oldAppHash
 $userRoot = Join-Path $upgradeData "QingCi"
 New-Item -ItemType Directory -Path $userRoot -Force | Out-Null
 $preferences = Join-Path $userRoot "preferences.json"
@@ -291,6 +356,8 @@ foreach ($item in $partialHashes) {
     if ((Get-Sha256 $item.path) -ne $item.sha256) { throw "Upgrade changed a partial user voice resource: $($item.path)" }
 }
 if ((Get-Sha256 $oldAppExe) -eq $oldAppHash) { throw "Candidate upgrade did not replace the v0.3.22 application executable" }
+$upgradedInstalledCrt = Get-CrtRecords $appRoot
+if ($upgradedInstalledCrt.Count -gt 0) { throw "Upgrade left app-local MSVC CRT copies: $($upgradedInstalledCrt.path -join ', ')" }
 
 Set-InstallTreeAccess $appRoot "ReadOnly"
 $readonlyEvidence = Assert-ReadOnly $appRoot
@@ -311,7 +378,11 @@ Set-InstallTreeAccess $appRoot "Writable"
 
 $report = [ordered]@{
     passed = $true
-    candidate_installer = [ordered]@{ path = $resolvedSetup; bytes = $candidateInfo.Length; sha256 = $candidateHash; old_updater_cap = $sizeLimit }
+    candidate_installer = [ordered]@{ path = $resolvedSetup; bytes = $candidateInfo.Length; sha256 = $candidateHash; old_updater_cap = $sizeLimit; minimum_system_runtime = $MinimumRuntimeVersion }
+    prerequisite_fixtures = [ordered]@{ interactive_missing_runtime = $missingPrerequisite; silent_too_old_runtime = $tooOldPrerequisite }
+    system_crt = (Get-Content -LiteralPath (Join-Path $resolvedReportRoot "system-crt-prerequisite.json") -Raw | ConvertFrom-Json)
+    installed_tree_crt_after_first_install = $firstInstalledCrt
+    installed_tree_crt_after_upgrade = $upgradedInstalledCrt
     v0_3_22 = [ordered]@{ url = $oldUrl; bytes = (Get-Item -LiteralPath $oldInstaller).Length; sha256 = Get-Sha256 $oldInstaller; install_tree_crt = $oldCrt; old_exe_sha256 = $oldAppHash }
     candidate_pyinstaller_tree_crt = $candidateCrt
     first_install = [ordered]@{ passed = $true; readonly = $firstReadOnly; acl = $firstAcl; tree_sha256_before = $firstTreeBefore; tree_sha256_after = $firstTreeAfter; smoke = $firstSmoke }

@@ -7,7 +7,7 @@ from scripts.collect_runtime_licenses import collect
 
 def command(*args):subprocess.run([str(x) for x in args],cwd=ROOT,check=True)
 
-def build(skip_installer=False, skip_portable=False, voice_bundle_root=None, allow_test_only_crt=False):
+def build(skip_installer=False, skip_portable=False, voice_bundle_root=None, minimum_msvc_runtime_version=None):
     version=(ROOT/'VERSION').read_text().strip()
     if sys.platform not in ('win32','darwin'):raise RuntimeError('Build on Windows or macOS')
     target='Windows' if sys.platform=='win32' else 'macOS'
@@ -25,8 +25,10 @@ def build(skip_installer=False, skip_portable=False, voice_bundle_root=None, all
         voice_report=audit_embedded_voice_payload(bundle_root)
         if not voice_report:raise RuntimeError('Incomplete locked voice bundle')
         package_manifest=json.loads((bundle_root/'licenses'/'speech'/'package-manifest.json').read_text(encoding='utf-8'))
-        if package_manifest.get('crt',{}).get('test_only') and not allow_test_only_crt:
-            raise RuntimeError('Runner CRT payload is test-only; release build requires separate redistribution approval')
+        if package_manifest.get('crt',{}).get('bundled') is not False:
+            raise RuntimeError('Voice package must not bundle Microsoft CRT DLLs')
+        if not minimum_msvc_runtime_version:
+            raise RuntimeError('Voice package build requires a minimum MSVC runtime version from the actual toolchain')
         voice_bundle_stage=stage/'speech'
         voice_license_stage=stage/'speech-licenses'
         if voice_bundle_stage.exists():shutil.rmtree(voice_bundle_stage)
@@ -35,7 +37,14 @@ def build(skip_installer=False, skip_portable=False, voice_bundle_root=None, all
         shutil.copytree(bundle_root/'licenses'/'speech',voice_license_stage)
         (stage/'speech-bundle-build-report.json').write_text(
             json.dumps(voice_report,indent=2,sort_keys=True)+'\\n',encoding='utf-8')
-    if sys.platform=='win32':command('powershell','-NoProfile','-File','build_bridge.ps1')
+    if sys.platform=='win32':
+        if voice_bundle_stage is not None:
+            dist_tree=ROOT/'dist'/'WoerTranslator'
+            if dist_tree.exists():
+                resolved=dist_tree.resolve()
+                if resolved.parent!=(ROOT/'dist').resolve():raise RuntimeError('Refusing to remove unexpected frozen app tree')
+                shutil.rmtree(dist_tree)
+        command('powershell','-NoProfile','-File','build_bridge.ps1')
     from PIL import Image
     icon=ROOT/'assets'/'沃尔翻译官.ico'
     if sys.platform=='darwin':
@@ -64,6 +73,16 @@ def build(skip_installer=False, skip_portable=False, voice_bundle_root=None, all
     if sys.platform=='win32':args+=['--manifest',str(ROOT/'QingCi.manifest'),'--add-binary',f'{ROOT/"DesktopBridge.exe"}{os.pathsep}.']
     else:args+=['--osx-bundle-identifier','io.github.blueaaa333.woer-translator','--hidden-import','mac_platform','--hidden-import','ApplicationServices','--hidden-import','Quartz','--hidden-import','AppKit']
     args+=[str(ROOT/'app.py')];command(*args)
+    if sys.platform=='win32' and voice_bundle_stage is not None:
+        dist_tree=ROOT/'dist'/'WoerTranslator'
+        crt_names={'vcruntime140.dll','vcruntime140_1.dll','msvcp140.dll'}
+        for path in sorted(dist_tree.rglob('*')):
+            if path.is_file() and path.name.lower() in crt_names:
+                path.unlink()
+        leftovers=[str(path.relative_to(dist_tree)) for path in dist_tree.rglob('*')
+                   if path.is_file() and path.name.lower() in crt_names]
+        if leftovers:
+            raise RuntimeError('Frozen voice bundle still contains app-local MSVC CRT DLLs: '+', '.join(leftovers))
     if sys.platform=='darwin':
         bundle=ROOT/'dist'/'WoerTranslator.app'
         plist=bundle/'Contents'/'Info.plist'
@@ -90,7 +109,15 @@ def build(skip_installer=False, skip_portable=False, voice_bundle_root=None, all
         if not skip_installer:
             compiler=Path(os.environ.get('ProgramFiles(x86)',r'C:\Program Files (x86)'))/'Inno Setup 6'/'ISCC.exe'
             if not compiler.exists():raise RuntimeError('Install Inno Setup 6 from its official source first')
-            command(compiler,f'/DAppVersion={version}',ROOT/'packaging'/'windows.iss')
+            inno_args=[f'/DAppVersion={version}']
+            if voice_bundle_stage is not None:
+                parts=minimum_msvc_runtime_version.split('.')
+                if len(parts)!=4 or any(not part.isdigit() for part in parts):
+                    raise RuntimeError('Invalid minimum MSVC runtime version: '+minimum_msvc_runtime_version)
+                names=('Major','Minor','Build','Revision')
+                inno_args.append('/DRequireMsvcRuntime=1')
+                inno_args.extend(f'/DMsvcRuntimeMinimum{name}={part}' for name,part in zip(names,parts))
+            command(compiler,*inno_args,ROOT/'packaging'/'windows.iss')
     else:
         app=ROOT/'dist'/'WoerTranslator.app'
         # A local ad-hoc signature is not a Developer ID signature or notarization.
@@ -112,5 +139,5 @@ def build(skip_installer=False, skip_portable=False, voice_bundle_root=None, all
         command(sys.executable,ROOT/'scripts'/'check_mac_update.py',out/f'WoerTranslator-{version}-macOS-{arch}.dmg')
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--skip-installer',action='store_true');parser.add_argument('--skip-portable',action='store_true');parser.add_argument('--voice-bundle-root',type=Path);parser.add_argument('--allow-test-only-crt',action='store_true',help='test only: permit runner CRT in a non-release probe package')
-    args=parser.parse_args();build(args.skip_installer,args.skip_portable,args.voice_bundle_root,args.allow_test_only_crt)
+    parser=argparse.ArgumentParser();parser.add_argument('--skip-installer',action='store_true');parser.add_argument('--skip-portable',action='store_true');parser.add_argument('--voice-bundle-root',type=Path);parser.add_argument('--minimum-msvc-runtime-version')
+    args=parser.parse_args();build(args.skip_installer,args.skip_portable,args.voice_bundle_root,args.minimum_msvc_runtime_version)
