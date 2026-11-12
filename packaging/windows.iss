@@ -20,7 +20,7 @@
     #define InstallerOutputName "WoerTranslator-MsvcRuntime-TooOld-Probe"
   #endif
 #else
-  #define InstallerOutputName "WoerTranslator-{#AppVersion}-Windows-x64-Setup"
+  #define InstallerOutputName "WoerTranslator-" + AppVersion + "-Windows-x64-Setup"
 #endif
 [Setup]
 AppId={{D613C38F-914D-419B-B07F-1853FD68938A}

@@ -1,8 +1,9 @@
 param(
-    [Parameter(Mandatory=$true)][string]$CandidateSetup,
-    [Parameter(Mandatory=$true)][string]$MissingRuntimeSetup,
-    [Parameter(Mandatory=$true)][string]$TooOldRuntimeSetup,
-    [Parameter(Mandatory=$true)][string]$MinimumRuntimeVersion,
+    [Parameter(Mandatory=$false)][string]$CandidateSetup = "",
+    [Parameter(Mandatory=$false)][string]$MissingRuntimeSetup = "",
+    [Parameter(Mandatory=$false)][string]$TooOldRuntimeSetup = "",
+    [Parameter(Mandatory=$false)][string]$MinimumRuntimeVersion = "",
+    [Parameter(Mandatory=$false)][switch]$SelfTestProcessTimeout,
     [Parameter(Mandatory=$false)][string]$ReportRoot = "build/voice-package-review"
 )
 $ErrorActionPreference = "Stop"
@@ -12,9 +13,10 @@ $testRoot = [IO.Path]::GetFullPath((Join-Path $runnerTemp "woer-voice-installer-
 if (-not $testRoot.StartsWith($runnerTemp, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Probe root is outside RUNNER_TEMP: $testRoot"
 }
-$resolvedSetup = [IO.Path]::GetFullPath($CandidateSetup)
+$resolvedSetup = if ($CandidateSetup) { [IO.Path]::GetFullPath($CandidateSetup) } else { "" }
 $resolvedReportRoot = [IO.Path]::GetFullPath($ReportRoot)
 New-Item -ItemType Directory -Path $testRoot,$resolvedReportRoot -Force | Out-Null
+$script:processEvents = @()
 
 function Get-Sha256([string]$Path) {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -118,6 +120,8 @@ function Assert-ReadOnly([string]$Root) {
 
 function Invoke-AppVoiceSmoke([string]$Exe, [string]$LocalData, [string]$Label) {
     $report = Join-Path $resolvedReportRoot "$Label-voice-smoke.json"
+    $stdoutLog = Join-Path $resolvedReportRoot "$Label-voice-smoke.stdout.txt"
+    $stderrLog = Join-Path $resolvedReportRoot "$Label-voice-smoke.stderr.txt"
     $marker = Join-Path $testRoot "$Label-smoke-inspected.marker"
     if (Test-Path -LiteralPath $report) { Remove-Item -LiteralPath $report -Force }
     if (Test-Path -LiteralPath $marker) { Remove-Item -LiteralPath $marker -Force }
@@ -135,62 +139,129 @@ function Invoke-AppVoiceSmoke([string]$Exe, [string]$LocalData, [string]$Label) 
     $start.ArgumentList.Add($marker)
     $start.Environment['LOCALAPPDATA'] = $LocalData
     $start.Environment['PATH'] = $pathWithoutVs
-    $process = [Diagnostics.Process]::Start($start)
-    $deadline = [DateTime]::UtcNow.AddMinutes(3)
-    while (-not (Test-Path -LiteralPath $report) -and -not $process.HasExited -and [DateTime]::UtcNow -lt $deadline) {
-        Start-Sleep -Milliseconds 200
-    }
-    if (-not (Test-Path -LiteralPath $report)) {
-        $stdout = $process.StandardOutput.ReadToEnd(); $stderr = $process.StandardError.ReadToEnd()
-        throw "Packaged voice self-test returned no report. Exit=$($process.ExitCode) stdout=$stdout stderr=$stderr"
-    }
-    $result = Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json
-    if (-not $result.passed) { throw "Packaged voice render failed: $($result.error)" }
-    $loaded = @()
-    $systemCrtDirectory = [IO.Path]::GetFullPath((Join-Path $env:SystemRoot "System32")).TrimEnd("\") + "\"
-    $processes = @([ordered]@{ role = "frozen-app"; process = $process })
-    foreach ($voice in @($result.voices.uk, $result.voices.us)) {
-        if (-not $voice.piper_pid) { throw "Missing Piper PID in packaged render report" }
-        $processes += [ordered]@{ role = "piper-$($voice.accent)"; process = (Get-Process -Id ([int]$voice.piper_pid)) }
-    }
-    foreach ($entry in $processes) {
-        foreach ($module in @($entry.process.Modules | Where-Object { $_.ModuleName -match '^(VCRUNTIME140(_1)?|MSVCP140)\.dll$' })) {
-            if (-not $module.FileName.StartsWith($systemCrtDirectory, [StringComparison]::OrdinalIgnoreCase)) {
-                throw "$($entry.role) loaded CRT outside the system x64 runtime directory: $($module.FileName)"
-            }
-            $loaded += [ordered]@{
-                role = $entry.role; process_id = $entry.process.Id; module = $module.ModuleName
-                path = $module.FileName; bytes = (Get-Item -LiteralPath $module.FileName).Length
-                sha256 = Get-Sha256 $module.FileName
-                file_version = [Diagnostics.FileVersionInfo]::GetVersionInfo($module.FileName).FileVersion
-                signature_status = [string](Get-AuthenticodeSignature -LiteralPath $module.FileName).Status
+    $stdoutWriter = [IO.StreamWriter]::new($stdoutLog, $false, [Text.UTF8Encoding]::new($false))
+    $stderrWriter = [IO.StreamWriter]::new($stderrLog, $false, [Text.UTF8Encoding]::new($false))
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $start
+    $process.add_OutputDataReceived([Diagnostics.DataReceivedEventHandler]{ param($sender,$eventArgs) if ($null -ne $eventArgs.Data) { $stdoutWriter.WriteLine($eventArgs.Data); $stdoutWriter.Flush() } })
+    $process.add_ErrorDataReceived([Diagnostics.DataReceivedEventHandler]{ param($sender,$eventArgs) if ($null -ne $eventArgs.Data) { $stderrWriter.WriteLine($eventArgs.Data); $stderrWriter.Flush() } })
+    $started = [DateTime]::UtcNow
+    $processStarted = $false
+    try {
+        [void]$process.Start()
+        $processStarted = $true
+        Write-ProcessEvent ([ordered]@{ stage = "voice-$Label"; event = "start"; pid = $process.Id; started_utc = $started.ToString("o"); timeout_seconds = 240 })
+        $process.BeginOutputReadLine(); $process.BeginErrorReadLine()
+        $deadline = $started.AddMinutes(4)
+        while (-not (Test-Path -LiteralPath $report) -and -not $process.HasExited -and [DateTime]::UtcNow -lt $deadline) {
+            Start-Sleep -Milliseconds 200
+        }
+        if (-not (Test-Path -LiteralPath $report)) {
+            throw "Packaged voice self-test returned no report within 240 seconds"
+        }
+        $result = Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json
+        if (-not $result.passed) { throw "Packaged voice render failed: $($result.error)" }
+        $loaded = @()
+        $systemCrtDirectory = [IO.Path]::GetFullPath((Join-Path $env:SystemRoot "System32")).TrimEnd("\") + "\"
+        $processes = @([ordered]@{ role = "frozen-app"; process = $process })
+        foreach ($voice in @($result.voices.uk, $result.voices.us)) {
+            if (-not $voice.piper_pid) { throw "Missing Piper PID in packaged render report" }
+            $processes += [ordered]@{ role = "piper-$($voice.accent)"; process = (Get-Process -Id ([int]$voice.piper_pid)) }
+        }
+        foreach ($entry in $processes) {
+            foreach ($module in @($entry.process.Modules | Where-Object { $_.ModuleName -match '^(VCRUNTIME140(_1)?|MSVCP140)\.dll$' })) {
+                if (-not $module.FileName.StartsWith($systemCrtDirectory, [StringComparison]::OrdinalIgnoreCase)) {
+                    throw "$($entry.role) loaded CRT outside the system x64 runtime directory: $($module.FileName)"
+                }
+                $loaded += [ordered]@{
+                    role = $entry.role; process_id = $entry.process.Id; module = $module.ModuleName
+                    path = $module.FileName; bytes = (Get-Item -LiteralPath $module.FileName).Length
+                    sha256 = Get-Sha256 $module.FileName
+                    file_version = [Diagnostics.FileVersionInfo]::GetVersionInfo($module.FileName).FileVersion
+                    signature_status = [string](Get-AuthenticodeSignature -LiteralPath $module.FileName).Status
+                }
             }
         }
+        $expectedCrt = @("VCRUNTIME140.dll", "MSVCP140.dll")
+        $loadedNames = @($loaded | ForEach-Object { $_["module"] } | Select-Object -Unique)
+        $missingLoaded = @($expectedCrt | Where-Object { $_ -notin $loadedNames })
+        if ($missingLoaded.Count) { throw "Frozen app or Piper did not report loaded system CRT modules: $($missingLoaded -join ', ')" }
+        Set-Content -LiteralPath $marker -Value "inspected" -Encoding ASCII
+        if (-not $process.WaitForExit(30000)) { throw "Packaged voice self-test did not exit within 30 seconds after report inspection" }
+        [void]$process.WaitForExit()
+        if ($process.ExitCode -ne 0) { throw "Packaged voice self-test exited $($process.ExitCode); stdout=$stdoutLog; stderr=$stderrLog" }
+        Write-ProcessEvent ([ordered]@{ stage = "voice-$Label"; pid = $process.Id; started_utc = $started.ToString("o"); ended_utc = [DateTime]::UtcNow.ToString("o"); exit_code = $process.ExitCode; timeout_seconds = 240; timed_out = $false; stdout_log = $stdoutLog; stderr_log = $stderrLog })
+        $result | Add-Member -NotePropertyName crt_modules_loaded -NotePropertyValue $loaded -Force
+        $result | Add-Member -NotePropertyName system_crt_directory -NotePropertyValue $systemCrtDirectory.TrimEnd("\") -Force
+        $result | Add-Member -NotePropertyName visual_studio_path_removed -NotePropertyValue $true -Force
+        $result | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $report -Encoding UTF8
+        return $result
+    } catch {
+        $treeTerminated = $false
+        if ($processStarted) {
+            $process.Refresh()
+            if (-not $process.HasExited) {
+                if ((Test-Path -LiteralPath $report) -and -not (Test-Path -LiteralPath $marker)) {
+                    Set-Content -LiteralPath $marker -Value "failure-cleanup" -Encoding ASCII
+                }
+                if (-not $process.WaitForExit(5000)) {
+                    $treeTerminated = Stop-TestProcessTree $process.Id
+                    [void]$process.WaitForExit(10000)
+                    $process.Refresh()
+                }
+            }
+        }
+        $hasExited = $false
+        $exitCode = $null
+        if ($processStarted) {
+            $process.Refresh()
+            $hasExited = $process.HasExited
+            if ($hasExited) { $exitCode = $process.ExitCode }
+        }
+        $elapsed = ([DateTime]::UtcNow - $started).TotalSeconds
+        $timeoutStage = if (-not (Test-Path -LiteralPath $report) -and $elapsed -ge 240) { "report" } elseif ((Test-Path -LiteralPath $report) -and -not $hasExited) { "post-report-exit" } else { $null }
+        $failure = [ordered]@{
+            stage = "voice-$Label"; pid = if ($processStarted) { $process.Id } else { $null }
+            started_utc = $started.ToString("o"); ended_utc = [DateTime]::UtcNow.ToString("o")
+            elapsed_seconds = [Math]::Round($elapsed, 2); timeout_stage = $timeoutStage
+            timeout_seconds = if ($timeoutStage -eq "report") { 240 } elseif ($timeoutStage -eq "post-report-exit") { 30 } else { $null }
+            timed_out = ($null -ne $timeoutStage); tree_terminated = $treeTerminated; process_exited = $hasExited
+            exit_code = $exitCode; report_exists = (Test-Path -LiteralPath $report)
+            stdout_log = $stdoutLog; stderr_log = $stderrLog; error = $_.Exception.Message
+        }
+        Write-ProcessEvent $failure
+        Write-Json (Join-Path $resolvedReportRoot "$Label-voice-smoke-failure.json") $failure
+        throw
+    } finally {
+        if ($processStarted -and $process.HasExited) { [void]$process.WaitForExit() }
+        $stdoutWriter.Dispose(); $stderrWriter.Dispose(); $process.Dispose()
     }
-    $expectedCrt = @("VCRUNTIME140.dll", "MSVCP140.dll")
-    $loadedNames = @($loaded | ForEach-Object { $_["module"] } | Select-Object -Unique)
-    $missingLoaded = @($expectedCrt | Where-Object { $_ -notin $loadedNames })
-    if ($missingLoaded.Count) { throw "Frozen app or Piper did not report loaded system CRT modules: $($missingLoaded -join ', ')" }
-    Set-Content -LiteralPath $marker -Value "inspected" -Encoding ASCII
-    $process.WaitForExit()
-    if ($process.ExitCode -ne 0) { throw "Packaged voice self-test exited $($process.ExitCode)" }
-    $result | Add-Member -NotePropertyName crt_modules_loaded -NotePropertyValue $loaded -Force
-    $result | Add-Member -NotePropertyName system_crt_directory -NotePropertyValue $systemCrtDirectory.TrimEnd("\") -Force
-    $result | Add-Member -NotePropertyName visual_studio_path_removed -NotePropertyValue $true -Force
-    $result | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $report -Encoding UTF8
-    return $result
 }
 
 function Install-Setup([string]$Path, [string]$InstallRoot) {
     $logName = "inno-install-{0}.log" -f ([Guid]::NewGuid().ToString("N"))
     $installLog = Join-Path $resolvedReportRoot $logName
+    $stageName = "install-" + [IO.Path]::GetFileNameWithoutExtension($Path)
     $arguments = @(
         "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-",
         "/LOG=`"$installLog`"", "/DIR=`"$InstallRoot`""
     )
-    $installer = Start-Process -FilePath $Path -ArgumentList $arguments -Wait -PassThru
+    $started = [DateTime]::UtcNow
+    try { $run = Invoke-BoundedProcess -Name $stageName -FilePath $Path -Arguments $arguments -TimeoutSeconds 300 }
+    catch {
+        $logTail = if (Test-Path -LiteralPath $installLog -PathType Leaf) { (Get-Content -LiteralPath $installLog -Tail 80) -join "`n" } else { "<Inno log was not created>" }
+        $failure = [ordered]@{ stage = $stageName; installer = $Path; requested_install_root = $InstallRoot; started_utc = $started.ToString("o"); ended_utc = [DateTime]::UtcNow.ToString("o"); timeout_seconds = 300; executable_exists = (Test-Path -LiteralPath (Join-Path $InstallRoot "WoerTranslator.exe")); inno_log_path = $installLog; inno_log_tail = $logTail; error = $_.Exception.Message }
+        Write-Json (Join-Path $resolvedReportRoot "installer-failure.json") $failure
+        throw
+    }
+    $installer = $run.process
     $exitCode = $installer.ExitCode
-    if ($exitCode -ne 0) { throw "Inno Setup failed with exit code ${exitCode}: $Path; log=$installLog" }
+    if ($exitCode -ne 0) {
+        $logTail = if (Test-Path -LiteralPath $installLog -PathType Leaf) { (Get-Content -LiteralPath $installLog -Tail 80) -join "`n" } else { "<Inno log was not created>" }
+        $failure = [ordered]@{ stage = $stageName; installer = $Path; requested_install_root = $InstallRoot; pid = $installer.Id; started_utc = $started.ToString("o"); ended_utc = [DateTime]::UtcNow.ToString("o"); exit_code = $exitCode; timeout_seconds = 300; executable_exists = (Test-Path -LiteralPath (Join-Path $InstallRoot "WoerTranslator.exe")); inno_log_path = $installLog; inno_log_tail = $logTail }
+        Write-Json (Join-Path $resolvedReportRoot "installer-failure.json") $failure
+        throw "Inno Setup failed with exit code ${exitCode}: $Path; log=$installLog"
+    }
     $expectedExe = Join-Path $InstallRoot "WoerTranslator.exe"
     if (-not (Test-Path -LiteralPath $expectedExe -PathType Leaf)) {
         $searchRoots = @($InstallRoot, (Join-Path $env:LOCALAPPDATA "Programs\WoerTranslator"), $testRoot) |
@@ -224,6 +295,58 @@ function Write-Json([string]$Path, $Value) {
     $Value | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $Path -Encoding UTF8
 }
 
+function Write-ProcessEvent($Event) {
+    $script:processEvents += $Event
+    Write-Json (Join-Path $resolvedReportRoot "process-events.json") ([ordered]@{ events = $script:processEvents })
+}
+
+function Stop-TestProcessTree([int]$ProcessId) {
+    $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+    if (-not $process) { return $true }
+    try {
+        $process.Kill($true)
+        if ($process.WaitForExit(10000)) { return $true }
+    } catch {
+        $killTreeError = $_.Exception.Message
+    }
+    $taskkill = Join-Path $env:SystemRoot "System32/taskkill.exe"
+    & $taskkill /PID $ProcessId /T /F 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) { return $true }
+    return (-not (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue))
+}
+
+function Invoke-BoundedProcess([string]$Name, [string]$FilePath, [string[]]$Arguments, [int]$TimeoutSeconds, [switch]$AllowTimeout) {
+    $started = [DateTime]::UtcNow
+    $process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -PassThru
+    $processId = $process.Id
+    Write-ProcessEvent ([ordered]@{ stage = $Name; event = "start"; file = $FilePath; arguments = $Arguments; pid = $processId; started_utc = $started.ToString("o"); timeout_seconds = $TimeoutSeconds })
+    $deadline = $started.AddSeconds($TimeoutSeconds)
+    while (-not $process.HasExited -and [DateTime]::UtcNow -lt $deadline) {
+        Start-Sleep -Milliseconds 200
+        $process.Refresh()
+    }
+    $timedOut = -not $process.HasExited
+    $treeTerminated = $false
+    if ($timedOut) {
+        $treeTerminated = Stop-TestProcessTree $processId
+        [void]$process.WaitForExit(10000)
+        $process.Refresh()
+    }
+    $processStopped = $process.HasExited
+    $event = [ordered]@{
+        stage = $Name; file = $FilePath; arguments = $Arguments; pid = $processId
+        started_utc = $started.ToString("o"); ended_utc = [DateTime]::UtcNow.ToString("o")
+        exit_code = if ($process.HasExited) { $process.ExitCode } else { $null }
+        timeout_seconds = $TimeoutSeconds; timed_out = $timedOut; tree_terminated = $treeTerminated; process_stopped = $processStopped
+    }
+    Write-ProcessEvent $event
+    if ($timedOut -and (-not $AllowTimeout -or -not $processStopped)) {
+        Write-Json (Join-Path $resolvedReportRoot "$Name-timeout-failure.json") $event
+        throw "Timed out after $TimeoutSeconds seconds in process stage '$Name'; pid=$processId; tree_terminated=$treeTerminated"
+    }
+    return [pscustomobject]@{ process = $process; event = $event; timed_out = $timedOut }
+}
+
 function Assert-BlockedPrerequisiteSetup([string]$SetupPath, [string]$Label, [bool]$Interactive,
     [string]$ExistingInstallRoot = "", [string]$ExpectedExistingExeSha256 = "") {
     if (-not (Test-Path -LiteralPath $SetupPath -PathType Leaf)) { throw "Prerequisite fixture installer is missing: $SetupPath" }
@@ -236,7 +359,9 @@ function Assert-BlockedPrerequisiteSetup([string]$SetupPath, [string]$Label, [bo
     $log = Join-Path $resolvedReportRoot "$Label-inno.log"
     $arguments = @("/LOG=`"$log`"", "/DIR=`"$destination`"")
     if (-not $Interactive) { $arguments += @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-") }
+    $started = [DateTime]::UtcNow
     $installer = Start-Process -FilePath $SetupPath -ArgumentList $arguments -PassThru
+    Write-ProcessEvent ([ordered]@{ stage = $Label; event = "start"; installer = $SetupPath; pid = $installer.Id; started_utc = $started.ToString("o"); timeout_seconds = 30 })
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
     $sentEnter = $false
     while (-not $installer.HasExited -and [DateTime]::UtcNow -lt $deadline) {
@@ -251,9 +376,14 @@ function Assert-BlockedPrerequisiteSetup([string]$SetupPath, [string]$Label, [bo
         Start-Sleep -Milliseconds 250
     }
     if (-not $installer.HasExited) {
-        Stop-Process -Id $installer.Id -Force
+        $treeTerminated = Stop-TestProcessTree $installer.Id
+        [void]$installer.WaitForExit(10000)
+        $failure = [ordered]@{ stage = $Label; installer = $SetupPath; pid = $installer.Id; started_utc = $started.ToString("o"); ended_utc = [DateTime]::UtcNow.ToString("o"); timeout_seconds = 30; timed_out = $true; tree_terminated = $treeTerminated; inno_log_path = $log }
+        Write-ProcessEvent $failure
+        Write-Json (Join-Path $resolvedReportRoot "$Label-timeout-failure.json") $failure
         throw "$Label prerequisite installer did not exit after the blocking check"
     }
+    Write-ProcessEvent ([ordered]@{ stage = $Label; installer = $SetupPath; pid = $installer.Id; started_utc = $started.ToString("o"); ended_utc = [DateTime]::UtcNow.ToString("o"); timeout_seconds = 30; timed_out = $false; exit_code = $installer.ExitCode; interactive = $Interactive })
     if ($installer.ExitCode -eq 0) { throw "$Label prerequisite installer unexpectedly succeeded" }
     if ($ExpectedExistingExeSha256) {
         if (-not (Test-Path -LiteralPath $existingExe -PathType Leaf) -or (Get-Sha256 $existingExe) -ne $beforeExeHash) {
@@ -269,6 +399,24 @@ function Assert-BlockedPrerequisiteSetup([string]$SetupPath, [string]$Label, [bo
         destination_created = (Test-Path -LiteralPath $destination)
         inno_log = $log; message_logged = $true; enter_sent = $sentEnter
     }
+}
+
+if ($SelfTestProcessTimeout) {
+    $hostExecutable = (Get-Process -Id $PID).Path
+    $timeoutProbe = Invoke-BoundedProcess -Name "timeout-fixture" -FilePath $hostExecutable `
+        -Arguments @("-NoProfile", "-Command", "Start-Sleep -Seconds 30") -TimeoutSeconds 2 -AllowTimeout
+    if (-not $timeoutProbe.timed_out -or -not $timeoutProbe.event.tree_terminated -or -not $timeoutProbe.event.process_stopped) {
+        throw "Non-exiting process timeout fixture was not terminated as expected"
+    }
+    Write-Json (Join-Path $resolvedReportRoot "process-timeout-self-test.json") ([ordered]@{
+        passed = $true; process = $timeoutProbe.event
+    })
+    Write-Output "Bounded child process timeout/cleanup fixture passed"
+    exit 0
+}
+
+if (-not $resolvedSetup -or -not $MissingRuntimeSetup -or -not $TooOldRuntimeSetup -or -not $MinimumRuntimeVersion) {
+    throw "Candidate setup, both prerequisite fixtures, and minimum runtime version are required"
 }
 
 $candidateInfo = Get-Item -LiteralPath $resolvedSetup
@@ -298,8 +446,9 @@ if ($firstTreeBefore -ne $firstTreeAfter) { throw "First-install app tree change
 Set-InstallTreeAccess $appRoot "Writable"
 $uninstaller = Join-Path $appRoot "unins000.exe"
 if (-not (Test-Path -LiteralPath $uninstaller)) { throw "First-install Inno uninstaller is missing" }
-& $uninstaller /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
-if ($LASTEXITCODE -ne 0) { throw "Candidate uninstaller failed with exit code $LASTEXITCODE" }
+$uninstallRun = Invoke-BoundedProcess -Name "candidate-uninstall" -FilePath $uninstaller `
+    -Arguments @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") -TimeoutSeconds 180
+if ($uninstallRun.process.ExitCode -ne 0) { throw "Candidate uninstaller failed with exit code $($uninstallRun.process.ExitCode)" }
 
 $oldName = "WoerTranslator-0.3.22-Windows-x64-Setup.exe"
 $oldUrl = "https://github.com/blueaaa333/woer-translator/releases/download/v0.3.22/$oldName"

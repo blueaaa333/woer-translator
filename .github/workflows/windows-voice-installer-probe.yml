@@ -62,16 +62,21 @@ jobs:
           $iss = Join-Path $env:GITHUB_WORKSPACE "packaging/windows.iss"
           $common = @("/DAppVersion=0.0.0", "/O$output")
           $modes = @(
-            @{ name = "default"; args = @() },
-            @{ name = "missing-runtime"; args = @("/DRequireMsvcRuntime=1", "/DProbeInstaller=1", "/DProbeForceMissingMsvcRuntime=1", "/DMsvcRuntimeMinimumMajor=14", "/DMsvcRuntimeMinimumMinor=44", "/DMsvcRuntimeMinimumBuild=35211", "/DMsvcRuntimeMinimumRevision=0") },
-            @{ name = "too-old-runtime"; args = @("/DRequireMsvcRuntime=1", "/DProbeInstaller=1", "/DMsvcRuntimeMinimumMajor=99", "/DMsvcRuntimeMinimumMinor=0", "/DMsvcRuntimeMinimumBuild=0", "/DMsvcRuntimeMinimumRevision=0") }
+            @{ name = "default"; output = "WoerTranslator-0.0.0-Windows-x64-Setup.exe"; args = @() },
+            @{ name = "missing-runtime"; output = "WoerTranslator-MsvcRuntime-Missing-Probe.exe"; args = @("/DRequireMsvcRuntime=1", "/DProbeInstaller=1", "/DProbeForceMissingMsvcRuntime=1", "/DMsvcRuntimeMinimumMajor=14", "/DMsvcRuntimeMinimumMinor=44", "/DMsvcRuntimeMinimumBuild=35211", "/DMsvcRuntimeMinimumRevision=0") },
+            @{ name = "too-old-runtime"; output = "WoerTranslator-MsvcRuntime-TooOld-Probe.exe"; args = @("/DRequireMsvcRuntime=1", "/DProbeInstaller=1", "/DMsvcRuntimeMinimumMajor=99", "/DMsvcRuntimeMinimumMinor=0", "/DMsvcRuntimeMinimumBuild=0", "/DMsvcRuntimeMinimumRevision=0") }
           )
           foreach ($mode in $modes) {
             $compilerArgs = @($common) + @($mode.args) + @($iss)
             & $compiler @compilerArgs
             if ($LASTEXITCODE -ne 0) { throw "Inno preflight '$($mode.name)' compilation failed: $LASTEXITCODE" }
+            $expectedOutput = Join-Path $output $mode.output
+            if (-not (Test-Path -LiteralPath $expectedOutput -PathType Leaf)) { throw "Inno preflight '$($mode.name)' output name mismatch: expected $expectedOutput" }
             Write-Host "Inno preflight '$($mode.name)' compilation passed"
           }
+      - name: Verify bounded child-process timeout and cleanup
+        shell: pwsh
+        run: ./tests/run_windows_voice_installer_probe.ps1 -SelfTestProcessTimeout
       - name: Read locked model license evidence
         shell: pwsh
         run: python scripts/preflight_voice_licenses.py --lock scripts/voice_runtime_lock.json --report build/voice-licensing/voice-license-preflight.json
