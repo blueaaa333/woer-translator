@@ -1,3 +1,4 @@
+param([string]$ReleaseVersion)
 $ErrorActionPreference = "Stop"
 $root = [IO.Path]::GetFullPath($env:GITHUB_WORKSPACE)
 $runtimeRoot = Join-Path $root "build/voice-runtime"
@@ -58,8 +59,10 @@ $prepareArgs = @("scripts/prepare_voice_bundle.py", "--runtime-root", $runtimeRo
     "--report", (Join-Path $reportRoot "voice-bundle.json"))
 python @prepareArgs
 if ($LASTEXITCODE -ne 0) { throw "Locked voice bundle staging failed: $LASTEXITCODE" }
+$version = if ($ReleaseVersion) { $ReleaseVersion } else { (Get-Content -LiteralPath (Join-Path $root "VERSION") -Raw).Trim() }
+if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid release version: $version" }
 $releaseArgs = @("scripts/build_release.py", "--voice-bundle-root", $bundleRoot,
-    "--minimum-msvc-runtime-version", $minimumRuntimeVersion.ToString(), "--skip-portable")
+    "--minimum-msvc-runtime-version", $minimumRuntimeVersion.ToString(), "--skip-portable", "--version", $version)
 python @releaseArgs
 if ($LASTEXITCODE -ne 0) { throw "Windows voice installer build failed: $LASTEXITCODE" }
 
@@ -67,7 +70,6 @@ $programFilesX86 = [Environment]::ExpandEnvironmentVariables("%ProgramFiles(x86)
 $compiler = Join-Path $programFilesX86 "Inno Setup 6/ISCC.exe"
 if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) { throw "Inno Setup compiler is missing: $compiler" }
 $iss = Join-Path $root "packaging/windows.iss"
-$version = (Get-Content -LiteralPath (Join-Path $root "VERSION") -Raw).Trim()
 $requiredParts = $minimumRuntimeVersion.ToString().Split(".")
 $minimumArgs = @()
 $minimumNames = @("Major", "Minor", "Build", "Revision")
@@ -87,3 +89,4 @@ $missingSetup = Join-Path $root "release-assets/WoerTranslator-MsvcRuntime-Missi
 $tooOldSetup = Join-Path $root "release-assets/WoerTranslator-MsvcRuntime-TooOld-Probe.exe"
 $probeScript = Join-Path $root "tests/run_windows_voice_installer_probe.ps1"
 & $probeScript -CandidateSetup $candidateSetup -MissingRuntimeSetup $missingSetup -TooOldRuntimeSetup $tooOldSetup -MinimumRuntimeVersion $minimumRuntimeVersion.ToString() -ReportRoot $reportRoot
+

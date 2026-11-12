@@ -69,6 +69,25 @@ class PrepareVoiceBundleTests(unittest.TestCase):
             self.assertFalse(result["crt"]["bundled"])
             self.assertEqual(audit_embedded_voice_payload(output)["files"], 7)
 
+    def test_corresponding_source_can_be_external_release_asset(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            runtime, models, lock, license_report = self.inputs(root)
+            output = root / "package"
+            prepare(runtime, models, license_report, output, lock_path=lock)
+            license_root = output / "licenses" / "speech"
+            archive = license_root / "piper-runtime-source.zip"
+            package_path = license_root / "package-manifest.json"
+            package = json.loads(package_path.read_text(encoding="utf-8"))
+            package["runtime_source_archive"]["asset_name"] = "WoerTranslator-0.3.23-piper-runtime-source.zip"
+            package_path.write_text(json.dumps(package), encoding="utf-8")
+            archive.unlink()
+            self.assertEqual(audit_embedded_voice_payload(output)["files"], 7)
+            package["runtime_source_archive"]["distribution"] = "embedded"
+            package_path.write_text(json.dumps(package), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "Missing separate Piper corresponding-source"):
+                audit_embedded_voice_payload(output)
+
     def test_extra_or_modified_voice_file_fails_closed(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -108,4 +127,5 @@ class PrepareVoiceBundleTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 

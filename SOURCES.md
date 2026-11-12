@@ -54,11 +54,13 @@ Private ECDICT-derived databases, exam PDFs and PDF-derived entries, legacy priv
 
 Recordings are fetched from Wikimedia Commons only after checking the exact word/accent filename and each file's author, reusable Creative Commons licence URL, restrictions, size, duration and SHA-1. Audio is not part of this repository or installers. User-local caches preserve original files, PCM conversions and per-file attribution; CC BY-SA recordings retain their source licence. See [speech sources and terms](docs/SPEECH.md). The decoder is [miniaudio 1.71](https://pypi.org/project/miniaudio/1.71/), with its exact package and dependency notices collected at build time.
 
-## Selected offline voices (v0.3.6)
+## Bundled Windows synthesis (v0.3.23)
 
-The optional Windows upgrade downloads en_GB-cori-high and en_US-kristin-medium from the fixed Piper voice revision in scripts/speech-downloads.json. The upstream model cards identify LibriVox / public-domain training data and from-scratch training. The original cards are retained in licenses/dictionary-voice-uk-MODEL_CARD.txt and licenses/dictionary-voice-us-MODEL_CARD.txt; the voice repository declares MIT. Original training-time phonemizer configurations are preserved. We do not redistribute model weights or the optional Piper runtime in the repository/installers, and do not use Bing dictionary audio. This is a synthesis option, not a claim of commercial-dictionary equivalence or an assurance covering all possible upstream rights.
+The Windows x64 installer packages the pinned UK en_GB-cori-high and US en_US-kristin-medium models with a Piper runtime built from the commits in scripts/voice_runtime_lock.json. Model/config/card bytes are checked against the lock. Local synthesis does not need a runtime or model download. The corresponding Piper runtime source archive, build manifest and notices are a separate version-matched GitHub Release asset named WoerTranslator-<version>-piper-runtime-source.zip; the full archive is not embedded in the installer. The installer retains model cards, repository MIT evidence, runtime notices, the source manifest and the archive SHA-256.
 
-
+The installer does not bundle Microsoft CRT. Windows requires a compatible x64 Microsoft Visual C++ Runtime, version 14.44.35211.0 or newer; Inno checks before changing the installation directory and points users to Microsoft's official installer page if the prerequisite is absent. Mac continues to use system voices. Human recording downloads remain governed by the existing online-recording preference. These synthesis voices are not commercial-dictionary recordings; model-card and LibriVox statements are preserved without a worldwide rights warranty.
 ## 在线维基词典
 
 通过 Wikimedia 官方 API 按需获取，词典文本及本软件的释义提取／繁简转换结果沿用 CC BY-SA 4.0。保留原词条、编辑历史与许可链接。与代码 MIT 许可分开标记。详见 [在线词典](docs/ONLINE_DICTIONARY.md)。不在源代码仓库分发用户在线缓存。
+
+

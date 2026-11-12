@@ -18,6 +18,13 @@ on:
       - tests/run_windows_voice_installer_probe.ps1
       - tests/test_prepare_voice_bundle.py
       - tests/test_distribution_audit.py
+      - scripts/release_assets.py
+      - tests/test_release_assets.py
+      - docs/RELEASE_NOTES.md
+      - docs/LICENSE_AUDIT.md
+      - SOURCES.md
+      - packaging/INSTALL-NOTICE.txt
+      - .github/workflows/release.yml
       - packaging/windows.iss
       - docs/SPEECH.md
   workflow_dispatch:
@@ -98,7 +105,10 @@ jobs:
         run: ./scripts/build_piper_runtime.ps1 -Mode VoiceSmoke
       - name: Stage bundle and test the real Inno installer
         shell: pwsh
-        run: ./scripts/build_windows_voice_bundle_probe.ps1
+        run: ./scripts/build_windows_voice_bundle_probe.ps1 -ReleaseVersion 0.3.23
+      - name: Stage v0.3.23 release assets without publishing
+        shell: pwsh
+        run: python scripts/release_assets.py stage --version 0.3.23
       - name: Upload only reports and corresponding source
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -110,4 +120,6 @@ jobs:
             build/voice-runtime/source-manifest.json
           if-no-files-found: warn
           retention-days: 14
+
+
 

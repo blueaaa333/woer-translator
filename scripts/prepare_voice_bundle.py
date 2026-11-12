@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -158,6 +159,7 @@ def prepare(runtime_root: Path, model_root: Path, license_report: Path,
         "runtime_source_archive": {
             "file": source_archive.name, "bytes": source_archive.stat().st_size,
             "sha256": sha256(license_root / source_archive.name),
+            "distribution": "separate-release-asset",
         },
         "source_manifest_sha256": sha256(license_root / source_manifest.name),
         "crt": {"bundled": False, "required_system_files": sorted(CRT_NAMES)},
@@ -182,7 +184,7 @@ def audit_embedded_voice_payload(base: Path) -> dict | None:
     source_archive = license_root / "piper-runtime-source.zip"
     source_manifest = license_root / "source-manifest.json"
     model_review = license_root / "model-license/model-license-review.json"
-    required = (package_manifest_path, source_archive, source_manifest, model_review,
+    required = (package_manifest_path, source_manifest, model_review,
                 license_root / "model-license/piper-voices-README.md",
                 license_root / "model-license/MIT-LICENSE-TEMPLATE.txt")
     missing = [str(path.relative_to(base)) for path in required if not path.is_file()]
@@ -193,8 +195,19 @@ def audit_embedded_voice_payload(base: Path) -> dict | None:
     package = json.loads(package_manifest_path.read_text(encoding="utf-8"))
     if package.get("model_revision") != lock["models"][0]["revision"]:
         raise RuntimeError("Voice package manifest revision mismatch")
-    if sha256(source_archive) != package["runtime_source_archive"]["sha256"]:
-        raise RuntimeError("Piper corresponding-source archive hash mismatch")
+    source_evidence = package.get("runtime_source_archive", {})
+    if (source_evidence.get("file") != "piper-runtime-source.zip"
+            or not isinstance(source_evidence.get("bytes"), int)
+            or not re.fullmatch(r"[a-f0-9]{64}", source_evidence.get("sha256", ""))):
+        raise RuntimeError("Piper corresponding-source archive evidence is incomplete")
+    if source_archive.is_file():
+        if (source_archive.stat().st_size != source_evidence["bytes"]
+                or sha256(source_archive) != source_evidence["sha256"]):
+            raise RuntimeError("Piper corresponding-source archive hash mismatch")
+    elif (source_evidence.get("distribution") != "separate-release-asset"
+          or not re.fullmatch(r"WoerTranslator-[0-9]+\.[0-9]+\.[0-9]+-piper-runtime-source\.zip",
+                              source_evidence.get("asset_name", ""))):
+        raise RuntimeError("Missing separate Piper corresponding-source release asset")
     if sha256(source_manifest) != package["source_manifest_sha256"]:
         raise RuntimeError("Piper source-manifest hash mismatch")
     review = json.loads(model_review.read_text(encoding="utf-8"))
@@ -231,4 +244,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 

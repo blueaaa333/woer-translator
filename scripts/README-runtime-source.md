@@ -1,5 +1,10 @@
 # Piper runtime source bundle
 
+This ZIP is a separate, version-matched GitHub Release asset named
+WoerTranslator-<version>-piper-runtime-source.zip; it is not embedded in the
+Windows installer. The installer retains model-card and component notices,
+source manifest, archive hash and a link to the matching release asset.
+
 This archive contains source ZIPs created from all six exact top-level commits
 in voice_runtime_lock.json and separately archived, locked source for every
 gitlink in those projects (including six ONNX Runtime gitlinks and nested
@@ -35,13 +40,12 @@ Visual Studio license terms; the list is not itself the license. The applicable
 [Visual C++ Runtime 2015-2022 license terms](https://visualstudio.microsoft.com/license-terms/vs2022-cruntime/)
 and Microsoft's [redistribution guidance](https://learn.microsoft.com/cpp/windows/redistributing-visual-cpp-files)
 are recorded with the artifact. These are Microsoft redistributables, not
-MIT/GPL components. The test record does not establish the publisher's right
-to include Microsoft CRT files in a standalone release; that licensing
-condition remains a release gate. The smoke result is specific to the
-runner's installed CRT. Windows System32 and API-set imports remain separate
+MIT/GPL components. The installer does not redistribute Microsoft CRT. It checks for an installed x64 system runtime at least 14.44.35211.0 and points users to Microsoft's official installation page if needed. CI smoke was run on a runner that already had a compatible system CRT; a clean machine without it is not covered. Windows System32 and API-set imports remain separate
 from the runner CRT and from bundled files.
 
 eSpeak NG is GPL-3.0-or-later. Any redistributed runtime must be accompanied
 by the matching source archive and notices generated with that runtime.
 This is a source/provenance record, not a non-infringement warranty.
+
+
 

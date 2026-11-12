@@ -2,9 +2,10 @@ Woer Translator / 沃尔翻译官
 
 Original application code: MIT. Dictionary text, icons, recordings and runtime
 components retain their own licenses. See THIRD_PARTY_NOTICES.md and licenses/
-in the application resources. This installer includes no Piper/eSpeak runtime
-or voice-model weights. Optional speech resources are downloaded directly from
-upstream when the user chooses the download action in Settings.
+in the application resources. The Windows v0.3.23 installer includes the pinned Piper runtime and UK/US voice-model weights. Their model cards and runtime notices are included in the application resources; the matching Piper corresponding-source ZIP is a separate asset on the same GitHub Release and is listed in SHA256SUMS.txt. Mac builds continue using system voices.
+
+This installer does not include Microsoft CRT files. Windows requires an installed x64 Microsoft Visual C++ Runtime version 14.44.35211.0 or newer. The installer checks this before changing the destination; if missing or too old, install it separately from Microsoft's official page:
+https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170
 
 With online dictionary enabled, an explicit lookup sends that word or phrase
 to Wiktionary. Online pronunciation may send the word to Wikimedia Commons.
@@ -14,3 +15,5 @@ Online features and automatic update checks can be disabled in Settings.
 Uninstalling preserves local settings, vocabulary lists and speech downloads.
 Open licences grant permission subject to their conditions, not a worldwide
 non-infringement warranty. See docs/LICENSE_AUDIT.md in the source repository.
+
+

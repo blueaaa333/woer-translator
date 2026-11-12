@@ -21,8 +21,31 @@ def installers(tag):
             f"{prefix}-macOS-arm64.dmg", f"{prefix}-macOS-x64.dmg"]
 
 
+def carries_voice_source(tag):
+    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag):
+        raise ValueError("Expected a stable release tag, e.g. v0.2.1")
+    return tuple(map(int, tag[1:].split("."))) >= (0, 3, 23)
+
+
+def source_archive(tag):
+    if not carries_voice_source(tag):
+        raise ValueError("This release does not require a Piper source archive")
+    return f"WoerTranslator-{tag[1:]}-piper-runtime-source.zip"
+
+
+def source_report(tag):
+    if not carries_voice_source(tag):
+        raise ValueError("This release does not require a Piper source report")
+    return f"WoerTranslator-{tag[1:]}-voice-source-report.json"
+
+
+def payload_names(tag):
+    result = installers(tag)
+    return result + ([source_archive(tag)] if carries_voice_source(tag) else [])
+
+
 def plan(release, tag):
-    required = set(installers(tag))
+    required = set(payload_names(tag)) | {"SHA256SUMS.txt"}
     if release["tag_name"] != tag or release.get("immutable"):
         raise ValueError("Release tag mismatch or immutable release")
     assets = release["assets"]
@@ -49,7 +72,7 @@ def checksums(release, tag):
     plan(release, tag)
     by_name = {a["name"]: a for a in release["assets"]}
     return "".join(f"{by_name[name]['digest'][7:]}  {name}\n"
-                   for name in sorted(installers(tag)))
+                   for name in sorted(payload_names(tag)))
 
 
 def release_notes(body, tag):
@@ -70,9 +93,14 @@ def release_notes(body, tag):
     links = ["下载 Windows 安装包", "下载 Mac Apple 芯片版", "下载 Mac Intel 版"]
     rows = "\n".join(f"| {label} | [{text}]({base}{name}) |"
                      for label, text, name in zip(labels, links, names))
+    source_line = (
+        f"\nWindows 语音运行时对应源码与构建/许可记录：[下载 Piper 源码归档]({base}{source_archive(tag)})。\n"
+        if carries_voice_source(tag) else ""
+    )
     header = (f"{START}\n### 下载安装\n\n| 你的电脑 | 安装包 |\n| --- | --- |\n{rows}\n\n"
               f"Mac：打开 DMG，把 App 拖入 Applications。[首次运行指南]({GUIDE})。\n\n"
-              f"[SHA-256 校验文件]({base}SHA256SUMS.txt) 用于核对下载完整性；普通安装无需下载源码。\n{END}\n\n")
+              f"[SHA-256 校验文件]({base}SHA256SUMS.txt) 用于核对下载完整性；普通安装无需下载源码。\n"
+              f"{source_line}{END}\n\n")
     body = re.sub(r"\n{3,}", "\n\n", body).strip()
     return header + body + "\n"
 
@@ -128,14 +156,14 @@ def apply(tags, directory):
         for asset in obsolete:
             gh("api", "--method", "DELETE", f"repos/{REPO}/releases/assets/{asset['id']}")
         final = fetch_release(tag)
-        expected = set(installers(tag)) | {"SHA256SUMS.txt"}
+        expected = set(payload_names(tag)) | {"SHA256SUMS.txt"}
         if {a["name"] for a in final["assets"]} != expected:
             raise ValueError("Unexpected final asset list")
-        if {a["name"]: a["digest"] for a in final["assets"] if a["name"] in installers(tag)} != {
-                a["name"]: a["digest"] for a in current["assets"] if a["name"] in installers(tag)}:
-            raise ValueError("Installer digest changed")
+        if {a["name"]: a["digest"] for a in final["assets"] if a["name"] in payload_names(tag)} != {
+                a["name"]: a["digest"] for a in current["assets"] if a["name"] in payload_names(tag)}:
+            raise ValueError("Release payload digest changed")
         (target / "after.json").write_text(json.dumps(final, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"{tag}: three installers and checksum manifest verified")
+        print(f"{tag}: {len(payload_names(tag))} payloads and checksum manifest verified")
 
 
 def release_identity(release):
@@ -146,9 +174,23 @@ def release_identity(release):
 
 def stage(version, source, target, notes):
     tag = "v" + version
-    names = installers(tag)
+    names = payload_names(tag)
     if target.exists():
         raise ValueError("Refusing to mix an existing directory into public assets")
+    source = Path(source)
+    if carries_voice_source(tag):
+        archive_path = source / source_archive(tag)
+        report_path = source / source_report(tag)
+        if not archive_path.is_file() or not report_path.is_file():
+            raise ValueError("Missing version-matched Piper source archive or build report")
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        digest = hashlib.sha256(archive_path.read_bytes()).hexdigest()
+        evidence = report.get("runtime_source_archive", {})
+        if (report.get("version") != version or evidence.get("file") != "piper-runtime-source.zip"
+                or evidence.get("release_asset") != source_archive(tag)
+                or evidence.get("bytes") != archive_path.stat().st_size
+                or evidence.get("sha256") != digest):
+            raise ValueError("Piper source archive does not match the same-build report")
     target.mkdir(parents=True)
     lines = []
     for name in names:
@@ -180,3 +222,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
