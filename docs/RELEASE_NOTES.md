@@ -1,3 +1,5 @@
+沃尔翻译官 v0.3.23：此版本 Windows x64 安装包包含固定版本的英式和美式离线合成语音，安装后不再下载语音模型或 Piper runtime。Piper 对应源码、构建记录和第三方许可通知作为同版独立 Release 资产提供，并列入 SHA-256 校验。安装器检查系统是否已有兼容的 Microsoft Visual C++ x64 Runtime；若没有，会在安装前提供微软官方页面，用户需自行安装。Mac 继续使用系统声音，真人录音联网偏好保持独立。
+
 沃尔翻译官 v0.3.22：公开版安装包加入固定版本的英汉词库，支持离线查看 ECDICT 提供的多条中文释义和词性。首次从源码准备词库时会下载并校验上游公开 CSV；安装后的查询不需要网络。保留上游 MIT 许可与来源说明，未使用个人 PDF、考试词库或本机混合词库。
 
 沃尔翻译官 v0.3.21：缺少语音时直接显示“安装英美语音”按钮，不再让用户从截断提示寻找下载入口。“来源”明确更名为“词典来源”。语音下载改为独立窗口，显示文件阶段、安装完成或失败类别，支持重试和后台下载，重复点击不会启动多个安装任务。下载流程不打开词典网页。
@@ -136,3 +138,5 @@ Windows 安装器尚无商业代码签名；Mac App 仅作本地临时签名，�
 ### Code signing policy
 
 正在申请 SignPath Foundation 的 Windows 开源签名支持，尚未获批，Windows 文件仍未签名。详见 [Code signing policy](https://github.com/blueaaa333/woer-translator/blob/main/docs/CODE_SIGNING_POLICY.md)。
+
+

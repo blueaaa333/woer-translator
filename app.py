@@ -943,7 +943,83 @@ class App:
    if not IS_WINDOWS:self.sync_mac_regions()
    try:self.root.after(25,self.poll)
    except tk.TclError:pass
+def offline_voice_package_self_test(report_path,release_marker=None):
+ import tempfile,wave
+ from voice_profile import voice_files
+ report_path=Path(report_path).resolve()
+ report_path.parent.mkdir(parents=True,exist_ok=True)
+ preference_path=DATA/'preferences.json'
+ before=hashlib.sha256(preference_path.read_bytes()).hexdigest() if preference_path.is_file() else None
+ settings=PreferenceStore(preference_path,read_only=True).read()
+ original_prefer_recordings=settings.get('prefer_recordings',True)
+ engine=SpeechEngine(BASE,DATA/'speech-cache',user_root=DATA/'speech')
+ engine.prefer_recordings=False
+ results={}
+ try:
+  for accent in (1,2):
+   folder=engine._voice_folder(accent)
+   model,config_path,config,upgraded,config_hash=voice_files(folder,accent)
+   audio=engine.render('dictionary',accent)
+   with wave.open(str(audio),'rb') as source:
+    frames=source.getnframes();rate=source.getframerate();channels=source.getnchannels();sample_width=source.getsampwidth()
+    pcm=source.readframes(frames)
+   if frames<=0 or not pcm or not any(pcm):raise RuntimeError('Offline voice returned empty or silent PCM')
+   digest=hashlib.sha256()
+   with Path(model).open('rb') as stream:
+    for chunk in iter(lambda:stream.read(1024*1024),b''):digest.update(chunk)
+   server=engine.servers.get(accent)
+   results['uk' if accent==1 else 'us']=dict(
+    selected_model=str(model),model_sha256=digest.hexdigest(),selected_config=str(config_path),
+    config_sha256=config_hash,language=config.get('language',{}).get('code'),
+    sample_rate=rate,channels=channels,sample_width=sample_width,frames=frames,
+    pcm_non_silent=True,audio_sha256=hashlib.sha256(pcm).hexdigest(),
+    piper_pid=(server['proc'].pid if server else None))
+  cache_temp=DATA/'speech-cache'/'_speech_tmp'
+  if not cache_temp.is_dir():raise RuntimeError('User-writable speech temp directory was not created')
+  with tempfile.TemporaryDirectory(prefix='voice-legacy-',dir=DATA) as legacy_temp:
+   legacy_root=Path(legacy_temp)
+   legacy_folder=legacy_root/'voices'/'uk';legacy_folder.mkdir(parents=True,exist_ok=True)
+   (legacy_folder/'voice.onnx').write_bytes(b'legacy selection fixture')
+   (legacy_folder/'voice.onnx.json').write_text(json.dumps({'language':{'code':'en_GB'}}),encoding='utf-8')
+   legacy_engine=SpeechEngine(BASE,DATA/'speech-cache',user_root=legacy_root)
+   try:
+    selected=legacy_engine._voice_folder(1)
+    if selected.resolve()!=legacy_folder.resolve():raise RuntimeError('Complete legacy voice pair was not preserved')
+    legacy_selection=str(selected)
+   finally:legacy_engine.close()
+  after=hashlib.sha256(preference_path.read_bytes()).hexdigest() if preference_path.is_file() else None
+  if before!=after:raise RuntimeError('Preference file changed during offline voice test')
+  report=dict(
+   passed=True,normal_call='SpeechEngine.render',prefer_recordings_in_saved_preferences=original_prefer_recordings,
+   network_disabled_in_test=True,resource_root=str(BASE),user_root=str(DATA/'speech'),
+   cache_root=str(DATA/'speech-cache'),temporary_audio_root=str(cache_temp),
+   preferences_before_sha256=before,preferences_after_sha256=after,
+   complete_legacy_pair_selection=legacy_selection,voices=results)
+  report_path.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+  if release_marker:
+   marker=Path(release_marker)
+   deadline=time.monotonic()+90
+   while not marker.exists() and time.monotonic()<deadline:time.sleep(.1)
+   if not marker.exists():raise TimeoutError('Timed out waiting for runtime-module inspection')
+  return report
+ finally:
+  engine.close()
+
+
 def main():
+ if '--offline-voice-self-test' in sys.argv:
+  index=sys.argv.index('--offline-voice-self-test')
+  report_path=sys.argv[index+1] if index+1<len(sys.argv) else DATA/'voice-package-smoke.json'
+  release_marker=None
+  if '--voice-probe-release' in sys.argv:
+   marker_index=sys.argv.index('--voice-probe-release')
+   if marker_index+1<len(sys.argv):release_marker=sys.argv[marker_index+1]
+  try:offline_voice_package_self_test(report_path,release_marker)
+  except Exception as error:
+   Path(report_path).parent.mkdir(parents=True,exist_ok=True)
+   Path(report_path).write_text(json.dumps({'passed':False,'error':str(error)},ensure_ascii=False,indent=2),encoding='utf-8')
+   return
+  return
  if '--check-menu-layout' in sys.argv:
   from menu_layout_checks import frozen_check
   frozen_check(App,sys.argv[sys.argv.index('--check-menu-layout')+1]);return

@@ -43,22 +43,24 @@ python scripts/prepare_data.py
 - OpenCC Python 0.1.7: [PyPI](https://pypi.org/project/opencc-python-reimplemented/0.1.7/), [source](https://github.com/yichen0831/opencc-python), [OpenCC data source](https://github.com/BYVoid/OpenCC). Apache-2.0; license and NOTICE retained; bundled in desktop installers.
 - Binary runtime: [CPython](https://github.com/python/cpython), [Tcl/Tk](https://github.com/tcltk), [PyObjC](https://github.com/ronaldoussoren/pyobjc), [PyInstaller](https://github.com/pyinstaller/pyinstaller). Build scripts collect exact installed license texts into `licenses/runtime` and record versions in `build-info.json`. PyInstaller's bootloader exception is retained. The app does not redistribute Apple system voices.
 - App icon: [Lucide languages](https://lucide.dev/icons/languages), [original SVG](https://github.com/lucide-icons/lucide/blob/main/icons/languages.svg). ISC; adapted palette, rounded background and rasterization. Full notice in `assets/Lucide-LICENSE.txt`.
-- Optional speech: pinned upstream downloads in `scripts/speech-downloads.json`; model cards and upstream terms in `licenses/`; details in `docs/SPEECH.md`. No speech binary or model weights are included.
+- Optional human recordings: pinned upstream downloads and licences are documented in `scripts/speech-downloads.json`, `licenses/` and `docs/SPEECH.md`. The v0.3.23 Windows x64 installer separately includes the pinned synthesis models and runtime described below; human-recording audio is not bundled.
 - Promotional poster: generated for this project with the built-in image generation tool, using the licensed app icon. Prompt and provenance in `docs/PROMO.md`. The displayed interface is illustrative.
 
 ## Not included
 
-Private ECDICT-derived databases, exam PDFs and PDF-derived entries, legacy private API integrations, browser screenshots containing third-party documents, personal vocabulary lists, settings, logs, audio caches, credentials, Piper runtime binaries and voice weights are absent. The public ECDICT input above is built separately from the pinned upstream CSV. Desktop installers contain only the separately documented runtime dependencies, not the user's existing installation folder.
+Private ECDICT-derived databases, exam PDFs and PDF-derived entries, legacy private API integrations, browser screenshots containing third-party documents, personal vocabulary lists, settings, logs, audio caches, credentials, private or legacy local voice models and runtime files are absent; the public pinned Windows synthesis assets are listed separately below. The public ECDICT input above is built separately from the pinned upstream CSV. Desktop installers contain only the separately documented runtime dependencies, not the user's existing installation folder.
 
 ## Optional human pronunciation (v0.3.3)
 
 Recordings are fetched from Wikimedia Commons only after checking the exact word/accent filename and each file's author, reusable Creative Commons licence URL, restrictions, size, duration and SHA-1. Audio is not part of this repository or installers. User-local caches preserve original files, PCM conversions and per-file attribution; CC BY-SA recordings retain their source licence. See [speech sources and terms](docs/SPEECH.md). The decoder is [miniaudio 1.71](https://pypi.org/project/miniaudio/1.71/), with its exact package and dependency notices collected at build time.
 
-## Selected offline voices (v0.3.6)
+## Bundled Windows synthesis (v0.3.23)
 
-The optional Windows upgrade downloads en_GB-cori-high and en_US-kristin-medium from the fixed Piper voice revision in scripts/speech-downloads.json. The upstream model cards identify LibriVox / public-domain training data and from-scratch training. The original cards are retained in licenses/dictionary-voice-uk-MODEL_CARD.txt and licenses/dictionary-voice-us-MODEL_CARD.txt; the voice repository declares MIT. Original training-time phonemizer configurations are preserved. We do not redistribute model weights or the optional Piper runtime in the repository/installers, and do not use Bing dictionary audio. This is a synthesis option, not a claim of commercial-dictionary equivalence or an assurance covering all possible upstream rights.
+The Windows x64 installer packages the pinned UK en_GB-cori-high and US en_US-kristin-medium models with a Piper runtime built from the commits in scripts/voice_runtime_lock.json. Model/config/card bytes are checked against the lock. Local synthesis does not need a runtime or model download. The corresponding Piper runtime source archive, build manifest and notices are a separate version-matched GitHub Release asset named WoerTranslator-<version>-piper-runtime-source.zip; the full archive is not embedded in the installer. The installer retains model cards, repository MIT evidence, runtime notices, the source manifest and the archive SHA-256.
 
-
+The installer does not bundle Microsoft CRT. Windows requires a compatible x64 Microsoft Visual C++ Runtime, version 14.44.35211.0 or newer; Inno checks before changing the installation directory and points users to Microsoft's official installer page if the prerequisite is absent. Mac continues to use system voices. Human recording downloads remain governed by the existing online-recording preference. These synthesis voices are not commercial-dictionary recordings; model-card and LibriVox statements are preserved without a worldwide rights warranty.
 ## 在线维基词典
 
 通过 Wikimedia 官方 API 按需获取，词典文本及本软件的释义提取／繁简转换结果沿用 CC BY-SA 4.0。保留原词条、编辑历史与许可链接。与代码 MIT 许可分开标记。详见 [在线词典](docs/ONLINE_DICTIONARY.md)。不在源代码仓库分发用户在线缓存。
+
+

@@ -37,7 +37,19 @@ jobs:
       - if: runner.os == 'Windows'
         shell: powershell
         run: .\tests\run_native.ps1
-      - run: python scripts/build_release.py
+      - if: runner.os == 'Windows'
+        name: Read pinned voice license evidence
+        run: python scripts/preflight_voice_licenses.py --lock scripts/voice_runtime_lock.json --report build/voice-licensing/voice-license-preflight.json
+      - if: runner.os == 'Windows'
+        name: Build pinned Piper runtime and offline voice smoke
+        shell: pwsh
+        run: ./scripts/build_piper_runtime.ps1 -Mode VoiceSmoke
+      - if: runner.os == 'Windows'
+        name: Build and validate the Windows voice installer
+        shell: pwsh
+        run: ./scripts/build_windows_voice_bundle_probe.ps1
+      - if: runner.os != 'Windows'
+        run: python scripts/build_release.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: installer-${{ matrix.label }}
@@ -96,3 +108,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python scripts/publish_update_feed.py "$(tr -d '\r\n' < VERSION)"
+
+

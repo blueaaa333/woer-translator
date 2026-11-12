@@ -1,5 +1,5 @@
 """Build only on the target OS. No personal data or optional speech binaries."""
-import argparse,json,os,platform,shutil,subprocess,sys,plistlib,tempfile
+import argparse,hashlib,json,os,platform,re,shutil,subprocess,sys,plistlib,tempfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
@@ -7,8 +7,9 @@ from scripts.collect_runtime_licenses import collect
 
 def command(*args):subprocess.run([str(x) for x in args],cwd=ROOT,check=True)
 
-def build(skip_installer=False):
-    version=(ROOT/'VERSION').read_text().strip()
+def build(skip_installer=False, skip_portable=False, voice_bundle_root=None, minimum_msvc_runtime_version=None, version_override=None):
+    version=version_override or (ROOT/'VERSION').read_text().strip()
+    if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+',version):raise RuntimeError('Invalid release version: '+version)
     if sys.platform not in ('win32','darwin'):raise RuntimeError('Build on Windows or macOS')
     target='Windows' if sys.platform=='win32' else 'macOS'
     arch='arm64' if platform.machine().lower() in ('arm64','aarch64') else 'x64'
@@ -16,14 +17,66 @@ def build(skip_installer=False):
     stage=ROOT/'build'/'release-resources';stage.mkdir(parents=True,exist_ok=True)
     versions=collect(stage/'runtime-licenses')
     (stage/'build-info.json').write_text(json.dumps(dict(version=version,platform=target,arch=arch,runtime=versions),indent=2),encoding='utf-8')
-    if sys.platform=='win32':command('powershell','-NoProfile','-File','build_bridge.ps1')
+    staged_version=stage/'VERSION'
+    staged_version.write_text(version+'\n',encoding='utf-8')
+    voice_bundle_stage=None
+    voice_license_stage=None
+    if voice_bundle_root is not None:
+        if sys.platform!='win32':raise RuntimeError('Preinstalled Piper resources are Windows-only')
+        from scripts.prepare_voice_bundle import audit_embedded_voice_payload
+        bundle_root=Path(voice_bundle_root).resolve()
+        voice_report=audit_embedded_voice_payload(bundle_root)
+        if not voice_report:raise RuntimeError('Incomplete locked voice bundle')
+        package_manifest=json.loads((bundle_root/'licenses'/'speech'/'package-manifest.json').read_text(encoding='utf-8'))
+        if package_manifest.get('crt',{}).get('bundled') is not False:
+            raise RuntimeError('Voice package must not bundle Microsoft CRT DLLs')
+        if not minimum_msvc_runtime_version:
+            raise RuntimeError('Voice package build requires a minimum MSVC runtime version from the actual toolchain')
+        voice_bundle_stage=stage/'speech'
+        voice_license_stage=stage/'speech-licenses'
+        if voice_bundle_stage.exists():shutil.rmtree(voice_bundle_stage)
+        if voice_license_stage.exists():shutil.rmtree(voice_license_stage)
+        shutil.copytree(bundle_root/'speech',voice_bundle_stage)
+        shutil.copytree(bundle_root/'licenses'/'speech',voice_license_stage)
+        source_archive=bundle_root/'licenses'/'speech'/'piper-runtime-source.zip'
+        source_info=package_manifest.get('runtime_source_archive',{})
+        if (not source_archive.is_file() or source_archive.stat().st_size!=source_info.get('bytes')
+                or hashlib.sha256(source_archive.read_bytes()).hexdigest()!=source_info.get('sha256')):
+            raise RuntimeError('Piper source archive does not match the prepared voice bundle manifest')
+        source_asset_name=f'WoerTranslator-{version}-piper-runtime-source.zip'
+        source_asset=out/source_asset_name
+        shutil.copyfile(source_archive,source_asset)
+        source_report={
+            'version':version,
+            'runtime_source_archive':dict(source_info,file='piper-runtime-source.zip',release_asset=source_asset_name),
+        }
+        source_report_path=out/f'WoerTranslator-{version}-voice-source-report.json'
+        source_report_path.write_text(json.dumps(source_report,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+        embedded_source=voice_license_stage/'piper-runtime-source.zip'
+        if not embedded_source.is_file():raise RuntimeError('Prepared corresponding-source archive missing from license stage')
+        embedded_source.unlink()
+        embedded_manifest=voice_license_stage/'package-manifest.json'
+        package_manifest['runtime_source_archive']['distribution']='separate-release-asset'
+        package_manifest['runtime_source_archive']['asset_name']=source_asset_name
+        package_manifest['runtime_source_archive']['release_page_url']=f'https://github.com/blueaaa333/woer-translator/releases/download/v{version}/{source_asset_name}'
+        embedded_manifest.write_text(json.dumps(package_manifest,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+        (stage/'speech-bundle-build-report.json').write_text(
+            json.dumps(voice_report,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+    if sys.platform=='win32':
+        if voice_bundle_stage is not None:
+            dist_tree=ROOT/'dist'/'WoerTranslator'
+            if dist_tree.exists():
+                resolved=dist_tree.resolve()
+                if resolved.parent!=(ROOT/'dist').resolve():raise RuntimeError('Refusing to remove unexpected frozen app tree')
+                shutil.rmtree(dist_tree)
+        command('powershell','-NoProfile','-File','build_bridge.ps1')
     from PIL import Image
     icon=ROOT/'assets'/'沃尔翻译官.ico'
     if sys.platform=='darwin':
         icon=stage/'WoerTranslator.icns';Image.open(ROOT/'assets'/'沃尔翻译官.png').convert('RGBA').resize((1024,1024)).save(icon)
     args=[sys.executable,'-m','PyInstaller','--noconfirm','--clean','--windowed','--name','WoerTranslator','--icon',str(icon),'--collect-all','opencc','--exclude-module','numpy','--hidden-import','_cffi_backend']
     for name in ('words.db','extended.db','community.db','compound_entries.json','assets','licenses','LICENSE','SOURCES.md','THIRD_PARTY_NOTICES.md','VERSION'):
-        path=ROOT/name
+        path=staged_version if name=='VERSION' else ROOT/name
         if not path.exists():raise RuntimeError('Missing resource: '+name)
         args+=['--add-data',f'{path}{os.pathsep}.']
     ecdict_manifest=ROOT/'build'/'ecdict'/'manifest.json'
@@ -38,9 +91,23 @@ def build(skip_installer=False):
            '--add-data',f'{ROOT/"docs"/"MAC_FIRST_RUN.html"}{os.pathsep}docs',
            '--add-data',f'{ROOT/"scripts"/"speech-downloads.json"}{os.pathsep}scripts','--hidden-import','scripts.setup_speech',
            '--hidden-import','scripts.check_runtime']
+    if voice_bundle_stage is not None:
+        args+=['--add-data',f'{voice_bundle_stage}{os.pathsep}speech',
+               '--add-data',f'{voice_license_stage}{os.pathsep}licenses/speech',
+               '--hidden-import','scripts.prepare_voice_bundle']
     if sys.platform=='win32':args+=['--manifest',str(ROOT/'QingCi.manifest'),'--add-binary',f'{ROOT/"DesktopBridge.exe"}{os.pathsep}.']
     else:args+=['--osx-bundle-identifier','io.github.blueaaa333.woer-translator','--hidden-import','mac_platform','--hidden-import','ApplicationServices','--hidden-import','Quartz','--hidden-import','AppKit']
     args+=[str(ROOT/'app.py')];command(*args)
+    if sys.platform=='win32' and voice_bundle_stage is not None:
+        dist_tree=ROOT/'dist'/'WoerTranslator'
+        crt_names={'vcruntime140.dll','vcruntime140_1.dll','msvcp140.dll'}
+        for path in sorted(dist_tree.rglob('*')):
+            if path.is_file() and path.name.lower() in crt_names:
+                path.unlink()
+        leftovers=[str(path.relative_to(dist_tree)) for path in dist_tree.rglob('*')
+                   if path.is_file() and path.name.lower() in crt_names]
+        if leftovers:
+            raise RuntimeError('Frozen voice bundle still contains app-local MSVC CRT DLLs: '+', '.join(leftovers))
     if sys.platform=='darwin':
         bundle=ROOT/'dist'/'WoerTranslator.app'
         plist=bundle/'Contents'/'Info.plist'
@@ -63,11 +130,19 @@ def build(skip_installer=False):
         if 'error' in runtime:raise RuntimeError('Frozen macOS UI check failed: '+str(runtime))
         shutil.copy2(runtime_report,out/f'WoerTranslator-{version}-{target}-{arch}-runtime.json')
     if sys.platform=='win32':
-        shutil.make_archive(str(out/f'WoerTranslator-{version}-Windows-x64-Portable'),'zip',ROOT/'dist','WoerTranslator')
+        if not skip_portable:shutil.make_archive(str(out/f'WoerTranslator-{version}-Windows-x64-Portable'),'zip',ROOT/'dist','WoerTranslator')
         if not skip_installer:
             compiler=Path(os.environ.get('ProgramFiles(x86)',r'C:\Program Files (x86)'))/'Inno Setup 6'/'ISCC.exe'
             if not compiler.exists():raise RuntimeError('Install Inno Setup 6 from its official source first')
-            command(compiler,f'/DAppVersion={version}',ROOT/'packaging'/'windows.iss')
+            inno_args=[f'/DAppVersion={version}']
+            if voice_bundle_stage is not None:
+                parts=minimum_msvc_runtime_version.split('.')
+                if len(parts)!=4 or any(not part.isdigit() for part in parts):
+                    raise RuntimeError('Invalid minimum MSVC runtime version: '+minimum_msvc_runtime_version)
+                names=('Major','Minor','Build','Revision')
+                inno_args.append('/DRequireMsvcRuntime=1')
+                inno_args.extend(f'/DMsvcRuntimeMinimum{name}={part}' for name,part in zip(names,parts))
+            command(compiler,*inno_args,ROOT/'packaging'/'windows.iss')
     else:
         app=ROOT/'dist'/'WoerTranslator.app'
         # A local ad-hoc signature is not a Developer ID signature or notarization.
@@ -89,5 +164,6 @@ def build(skip_installer=False):
         command(sys.executable,ROOT/'scripts'/'check_mac_update.py',out/f'WoerTranslator-{version}-macOS-{arch}.dmg')
 
 if __name__=='__main__':
-    parser=argparse.ArgumentParser();parser.add_argument('--skip-installer',action='store_true')
-    build(parser.parse_args().skip_installer)
+    parser=argparse.ArgumentParser();parser.add_argument('--skip-installer',action='store_true');parser.add_argument('--skip-portable',action='store_true');parser.add_argument('--voice-bundle-root',type=Path);parser.add_argument('--minimum-msvc-runtime-version');parser.add_argument('--version')
+    args=parser.parse_args();build(args.skip_installer,args.skip_portable,args.voice_bundle_root,args.minimum_msvc_runtime_version,args.version)
+

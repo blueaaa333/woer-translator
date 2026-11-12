@@ -24,7 +24,9 @@ Mac 版使用系统自带 `/usr/bin/say` 和 `/usr/bin/afplay`，按语言区域
 
 新包英式使用 `en_GB-cori-high`，美式使用 `en_US-kristin-medium`；两个按钮调用不同模型，并保留各模型原始的音素前端配置。不能仅凭 language.code 把 espeak.voice 强改成另一名称，否则可能与模型训练时的音素系统不匹配。旧的 Cori Medium / LJSpeech Medium 文件继续作为兼容回退，不被覆盖。它们是本机合成语音，不能保证所有专名、多音词或上下文中的重音都准确。
 
-源码和桌面安装包不附带 Piper 二进制、eSpeak NG、ONNX Runtime 或模型权重。用户在软件菜单选择“下载英美离线语音”或执行 `python scripts/setup_speech.py` 后，才直接从上游下载，并核对固定 SHA-256。模型采用固定 Hugging Face 提交，运行时固定 Piper 2023.11.14-2 发布文件，具体见 `scripts/speech-downloads.json`。安装包下载到本机用户数据目录，源码脚本默认下载到源码目录。
+v0.3.23 Windows x64 安装包将预装固定 SHA-256 校验的英式、美式模型及由锁定源码构建的 Piper runtime；本地合成不需要再下载模型或 runtime。对应运行时源码、构建记录和完整第三方声明作为独立的同版本 Release 资产提供，不塞入安装器：[v0.3.23 Release 页面](https://github.com/blueaaa333/woer-translator/releases/tag/v0.3.23)。安装器不包含 Microsoft CRT，要求系统预先安装与构建版本兼容的 Microsoft Visual C++ x64 Runtime（至少 14.44.35211.0）；缺失或过旧时，安装器会在改动安装目录前提示用户从[微软官方页面](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)独立安装。安装器不会联网代下载或分发 CRT。Mac 继续使用系统自带声音，不附带这些 Windows 语音模型。
+
+模型采用固定 Hugging Face 提交，锁定运行时及来源见 `scripts/voice_runtime_lock.json`、`scripts/build_piper_runtime.ps1` 和 `scripts/archive_piper_sources.ps1`。手动语音下载入口仍保留给旧安装或开发环境。
 
 - [Piper 发布](https://github.com/rhasspy/piper/releases/tag/2023.11.14-2)
 - [Piper 源码与 MIT 许可](https://github.com/rhasspy/piper/tree/2023.11.14-2)
@@ -35,9 +37,9 @@ Mac 版使用系统自带 `/usr/bin/say` 和 `/usr/bin/afplay`，按语言区域
 
 两份模型卡将训练语料列为 LibriVox，标注 public domain；声音仓库元数据标注 MIT。保留原模型卡，不声称声音或发音由本项目原创。
 
-Piper 的开源许可不等于整套第三方依赖都采用 MIT。eSpeak NG 属于 GPL 组件；若未来分发含这些运行组件的安装包，需要针对实际二进制版本提供对应源码、必要构建信息及完整第三方声明。当前核查无法从历史构建的浮动依赖精确追溯全部二进制对应源码，因此本次不重新分发这些运行包。
+Piper 的开源许可不等于整套第三方依赖都采用 MIT。eSpeak NG 属于 GPL-3.0-or-later 组件。v0.3.23 Windows 候选包对应的 `piper-runtime-source.zip` 从固定源码提交和递归 gitlink 构建，随同版本 Release 提供；安装器保留各组件许可、模型卡、固定版本及源码归档校验值。模型权重不放入源码归档。模型仓库声明 MIT，原始模型卡保留 LibriVox 训练语料说明；声音人格权益与全球训练资料权利不作零风险保证。
 
-上述模型仅在用户主动选择下载时联网；合成过程和闲置释放不联网。真人录音的联网行为见上文。应用默认不自动朗读；可在“···”开启，开关和口音会保存。
+Windows 包内合成模型和 Piper runtime 不需要联网；真人录音仍按上文的偏好设置联网获取，关闭“优先真人发音（联网）”后可直接使用本地合成。应用默认不自动朗读；可在“···”开启，开关和口音会保存。
 
 ## Windows 声音检查（v0.3.4）
 
@@ -61,3 +63,4 @@ Piper 的开源许可不等于整套第三方依赖都采用 MIT。eSpeak NG 属
 ## 中国大陆公开权利核验补充（2026-10-27）
 
 Cori High／Kristin Medium 的公开模型许可和训练录音说明已核对，但本次未取得可核验的原录音人对训练、合成及对外提供声音的单独同意证据，不能宣称已完成全部声音人格权益清理。不随包分发权重、由用户下载也不构成当然免责。此为证据缺口，不是认定模型作者或用户已经侵权。详见 [核验补充](CN_PUBLIC_REVIEW.md)。
+
