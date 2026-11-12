@@ -212,35 +212,29 @@ function Invoke-AppVoiceSmoke([string]$Exe, [string]$LocalData, [string]$Label) 
     $stdoutLog = Join-Path $resolvedReportRoot "$Label-voice-smoke.stdout.txt"
     $stderrLog = Join-Path $resolvedReportRoot "$Label-voice-smoke.stderr.txt"
     $marker = Join-Path $testRoot "$Label-smoke-inspected.marker"
-    if (Test-Path -LiteralPath $report) { Remove-Item -LiteralPath $report -Force }
-    if (Test-Path -LiteralPath $marker) { Remove-Item -LiteralPath $marker -Force }
+    foreach ($existing in @($report, $marker, $stdoutLog, $stderrLog)) {
+        if (Test-Path -LiteralPath $existing) { Remove-Item -LiteralPath $existing -Force }
+    }
     $pathWithoutVs = ($env:PATH -split ';' | Where-Object { $_ -notmatch '(?i)\\Microsoft Visual Studio\\|\\VC\\Tools\\MSVC\\' }) -join ';'
-    $start = [Diagnostics.ProcessStartInfo]::new()
-    $start.FileName = $Exe
-    $start.WorkingDirectory = $testRoot
-    $start.UseShellExecute = $false
-    $start.CreateNoWindow = $true
-    $start.RedirectStandardOutput = $true
-    $start.RedirectStandardError = $true
-    $start.ArgumentList.Add('--offline-voice-self-test')
-    $start.ArgumentList.Add($report)
-    $start.ArgumentList.Add('--voice-probe-release')
-    $start.ArgumentList.Add($marker)
-    $start.Environment['LOCALAPPDATA'] = $LocalData
-    $start.Environment['PATH'] = $pathWithoutVs
-    $stdoutWriter = [IO.StreamWriter]::new($stdoutLog, $false, [Text.UTF8Encoding]::new($false))
-    $stderrWriter = [IO.StreamWriter]::new($stderrLog, $false, [Text.UTF8Encoding]::new($false))
-    $process = [Diagnostics.Process]::new()
-    $process.StartInfo = $start
-    $process.add_OutputDataReceived([Diagnostics.DataReceivedEventHandler]{ param($sender,$eventArgs) if ($null -ne $eventArgs.Data) { $stdoutWriter.WriteLine($eventArgs.Data); $stdoutWriter.Flush() } })
-    $process.add_ErrorDataReceived([Diagnostics.DataReceivedEventHandler]{ param($sender,$eventArgs) if ($null -ne $eventArgs.Data) { $stderrWriter.WriteLine($eventArgs.Data); $stderrWriter.Flush() } })
     $started = [DateTime]::UtcNow
     $processStarted = $false
+    $process = $null
     try {
-        [void]$process.Start()
+        $oldLocalData = $env:LOCALAPPDATA
+        $oldPath = $env:PATH
+        try {
+            $env:LOCALAPPDATA = $LocalData
+            $env:PATH = $pathWithoutVs
+            $arguments = @('--offline-voice-self-test', ('"' + $report + '"'), '--voice-probe-release', ('"' + $marker + '"'))
+            $child = Start-BoundedProcess -Name "voice-$Label" -FilePath $Exe -Arguments $arguments `
+                -WorkingDirectory $testRoot -StdOutPath $stdoutLog -StdErrPath $stderrLog
+            $process = $child.process
+            $started = $child.started
+        } finally {
+            $env:LOCALAPPDATA = $oldLocalData
+            $env:PATH = $oldPath
+        }
         $processStarted = $true
-        Write-ProcessEvent ([ordered]@{ stage = "voice-$Label"; event = "start"; pid = $process.Id; started_utc = $started.ToString("o"); timeout_seconds = 240 })
-        $process.BeginOutputReadLine(); $process.BeginErrorReadLine()
         $deadline = $started.AddMinutes(4)
         while (-not (Test-Path -LiteralPath $report) -and -not $process.HasExited -and [DateTime]::UtcNow -lt $deadline) {
             Start-Sleep -Milliseconds 200
@@ -323,7 +317,7 @@ function Invoke-AppVoiceSmoke([string]$Exe, [string]$LocalData, [string]$Label) 
         throw
     } finally {
         if ($processStarted -and $process.HasExited) { [void]$process.WaitForExit() }
-        $stdoutWriter.Dispose(); $stderrWriter.Dispose(); $process.Dispose()
+        if ($null -ne $process) { $process.Dispose() }
     }
 }
 
@@ -404,11 +398,34 @@ function Stop-TestProcessTree([int]$ProcessId) {
     return (-not (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue))
 }
 
-function Invoke-BoundedProcess([string]$Name, [string]$FilePath, [string[]]$Arguments, [int]$TimeoutSeconds, [switch]$AllowTimeout) {
+function Start-BoundedProcess([string]$Name, [string]$FilePath, [string[]]$Arguments,
+    [string]$WorkingDirectory = "", [string]$StdOutPath = "", [string]$StdErrPath = "") {
     $started = [DateTime]::UtcNow
-    $process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -PassThru
+    $startParameters = @{ FilePath = $FilePath; ArgumentList = $Arguments; PassThru = $true }
+    if ($WorkingDirectory) { $startParameters.WorkingDirectory = $WorkingDirectory }
+    foreach ($path in @($StdOutPath, $StdErrPath) | Where-Object { $_ }) {
+        $parent = Split-Path -Parent $path
+        if ($parent) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+        if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
+    }
+    if ($StdOutPath) { $startParameters.RedirectStandardOutput = $StdOutPath }
+    if ($StdErrPath) { $startParameters.RedirectStandardError = $StdErrPath }
+    $process = Start-Process @startParameters
     $processId = $process.Id
-    Write-ProcessEvent ([ordered]@{ stage = $Name; event = "start"; file = $FilePath; arguments = $Arguments; pid = $processId; started_utc = $started.ToString("o"); timeout_seconds = $TimeoutSeconds })
+    Write-ProcessEvent ([ordered]@{
+        stage = $Name; event = "start"; file = $FilePath; arguments = $Arguments; pid = $processId
+        started_utc = $started.ToString("o"); stdout_log = $StdOutPath; stderr_log = $StdErrPath
+    })
+    return [pscustomobject]@{ process = $process; started = $started; name = $Name; stdout_log = $StdOutPath; stderr_log = $StdErrPath }
+}
+
+function Invoke-BoundedProcess([string]$Name, [string]$FilePath, [string[]]$Arguments, [int]$TimeoutSeconds,
+    [switch]$AllowTimeout, [string]$WorkingDirectory = "", [string]$StdOutPath = "", [string]$StdErrPath = "") {
+    $child = Start-BoundedProcess -Name $Name -FilePath $FilePath -Arguments $Arguments `
+        -WorkingDirectory $WorkingDirectory -StdOutPath $StdOutPath -StdErrPath $StdErrPath
+    $process = $child.process
+    $processId = $process.Id
+    $started = $child.started
     $deadline = $started.AddSeconds($TimeoutSeconds)
     while (-not $process.HasExited -and [DateTime]::UtcNow -lt $deadline) {
         Start-Sleep -Milliseconds 200
@@ -427,6 +444,7 @@ function Invoke-BoundedProcess([string]$Name, [string]$FilePath, [string[]]$Argu
         started_utc = $started.ToString("o"); ended_utc = [DateTime]::UtcNow.ToString("o")
         exit_code = if ($process.HasExited) { $process.ExitCode } else { $null }
         timeout_seconds = $TimeoutSeconds; timed_out = $timedOut; tree_terminated = $treeTerminated; process_stopped = $processStopped
+        stdout_log = $StdOutPath; stderr_log = $StdErrPath
     }
     Write-ProcessEvent $event
     if ($timedOut -and (-not $AllowTimeout -or -not $processStopped)) {
@@ -589,14 +607,26 @@ function Assert-BlockedPrerequisiteSetup([string]$SetupPath, [string]$Label, [bo
 
 if ($SelfTestProcessTimeout) {
     $hostExecutable = (Get-Process -Id $PID).Path
+    $normalStdout = Join-Path $resolvedReportRoot "redirect-normal.stdout.txt"
+    $normalStderr = Join-Path $resolvedReportRoot "redirect-normal.stderr.txt"
+    $normalProbe = Invoke-BoundedProcess -Name "redirect-normal-fixture" -FilePath $hostExecutable `
+        -Arguments @("-NoProfile", "-Command", "Write-Output 'stdout-ok'; [Console]::Error.WriteLine('stderr-ok')") `
+        -TimeoutSeconds 15 -StdOutPath $normalStdout -StdErrPath $normalStderr
+    if ($normalProbe.process.ExitCode -ne 0 -or (Get-Content -LiteralPath $normalStdout -Raw) -notmatch 'stdout-ok' -or
+        (Get-Content -LiteralPath $normalStderr -Raw) -notmatch 'stderr-ok') {
+        throw "Direct stdout/stderr file redirection failed for a normally exiting child"
+    }
+    $timeoutStdout = Join-Path $resolvedReportRoot "redirect-timeout.stdout.txt"
+    $timeoutStderr = Join-Path $resolvedReportRoot "redirect-timeout.stderr.txt"
     $timeoutProbe = Invoke-BoundedProcess -Name "timeout-fixture" -FilePath $hostExecutable `
-        -Arguments @("-NoProfile", "-Command", "Start-Sleep -Seconds 30") -TimeoutSeconds 2 -AllowTimeout
+        -Arguments @("-NoProfile", "-Command", "Start-Sleep -Seconds 30") -TimeoutSeconds 2 -AllowTimeout `
+        -StdOutPath $timeoutStdout -StdErrPath $timeoutStderr
     if (-not $timeoutProbe.timed_out -or -not $timeoutProbe.event.tree_terminated -or -not $timeoutProbe.event.process_stopped) {
         throw "Non-exiting process timeout fixture was not terminated as expected"
     }
     $nativeWindows = @([WoerInstallerWindowProbe]::GetVisibleWindows([int[]]@($PID)))
     Write-Json (Join-Path $resolvedReportRoot "process-timeout-self-test.json") ([ordered]@{
-        passed = $true; process = $timeoutProbe.event
+        passed = $true; normal_exit = $normalProbe.event; process = $timeoutProbe.event
         window_helper = [ordered]@{ compiled = $true; enumerated_current_process = $true; visible_windows = $nativeWindows.Count }
     })
     Write-Output "Bounded child process timeout/cleanup fixture passed"
