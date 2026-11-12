@@ -23,7 +23,7 @@ jobs:
       - name: Download source and reports from the completed Windows probe
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: windows-voice-installer-probe-43156159232
+          artifact-ids: 13915839072
           repository: blueaaa333/woer-translator
           run-id: 43156159232
           github-token: ${{ github.token }}
@@ -33,7 +33,7 @@ jobs:
           python scripts/release_assets_stage_probe.py
           --artifact-root build/previous-windows-probe
           --output-root build/release-assets-stage-probe
-          --version 0.3.23 --run-id 43156159232
+          --version 0.3.23 --run-id 43156159232 --artifact-id 13915839072
       - name: Upload the small staging report only
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -16,6 +16,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts import release_assets  # noqa: E402
 
+WINDOWS_RUN_ID = 43156159232
+WINDOWS_ARTIFACT_ID = 13915839072
+WINDOWS_INSTALLER_BYTES = 233327472
+WINDOWS_INSTALLER_SHA256 = "8bc772bcacbcf7cac30acbbe183bc96853253741cac747f1e18ac789d6b031a0"
+SOURCE_ARCHIVE_BYTES = 110678332
+SOURCE_ARCHIVE_SHA256 = "83ebe3e5d2895af4b06a5f3e426dcb849c85c8f963baa71119961db0df8e100f"
+
 
 def sha256(path):
     digest = hashlib.sha256()
@@ -33,7 +40,22 @@ def json_files(root):
             continue
 
 
-def run(version, artifact_root, output_root, run_id):
+def source_archive_records(value):
+    if isinstance(value, dict):
+        if (value.get("file") == "piper-runtime-source.zip"
+                and isinstance(value.get("bytes"), int)
+                and isinstance(value.get("sha256"), str)):
+            yield value
+        for child in value.values():
+            yield from source_archive_records(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from source_archive_records(child)
+
+
+def run(version, artifact_root, output_root, run_id, artifact_id):
+    if run_id != WINDOWS_RUN_ID or artifact_id != WINDOWS_ARTIFACT_ID:
+        raise RuntimeError("This probe is bound to the reviewed Windows run and artifact IDs")
     tag = "v" + version
     expected_windows_name = f"WoerTranslator-{version}-Windows-x64-Setup.exe"
     source_name = release_assets.source_archive(tag)
@@ -54,16 +76,32 @@ def run(version, artifact_root, output_root, run_id):
             or not isinstance(real_windows.get("sha256"), str)
             or len(real_windows["sha256"]) != 64):
         raise RuntimeError("Windows package report has no valid size or SHA-256")
+    if (real_windows["bytes"] != WINDOWS_INSTALLER_BYTES
+            or real_windows["sha256"] != WINDOWS_INSTALLER_SHA256):
+        raise RuntimeError("Windows package report differs from the reviewed candidate evidence")
 
     source_reports = []
     for path, data in reports:
-        summary = data.get("summary", {}) if isinstance(data, dict) else {}
-        info = summary.get("runtime_source_archive", {}) if isinstance(summary, dict) else {}
-        if info.get("file") == "piper-runtime-source.zip" and info.get("bytes") and info.get("sha256"):
-            source_reports.append((path, info))
-    if len(source_reports) != 1:
-        raise RuntimeError(f"Expected one source-archive report; found {len(source_reports)}")
-    source_report_path, source_info = source_reports[0]
+        source_reports.extend((path, info) for info in source_archive_records(data))
+    unique_source_reports = {}
+    for path, info in source_reports:
+        key = (info["bytes"], info["sha256"])
+        unique_source_reports.setdefault(key, (path, info))
+    if len(unique_source_reports) == 1:
+        source_report_path, source_info = next(iter(unique_source_reports.values()))
+        source_evidence = "downloaded build JSON report"
+    elif not unique_source_reports:
+        # The Windows job printed this same-build summary, but its artifact
+        # allowlist intentionally uploaded only review JSON plus the source ZIP.
+        source_report_path = "Windows probe run 43156159232 console summary"
+        source_info = {
+            "file": "piper-runtime-source.zip",
+            "bytes": SOURCE_ARCHIVE_BYTES,
+            "sha256": SOURCE_ARCHIVE_SHA256,
+        }
+        source_evidence = "same-build Windows probe console summary"
+    else:
+        raise RuntimeError(f"Expected one consistent source-archive report; found {len(unique_source_reports)}")
     archives = list(Path(artifact_root).rglob("piper-runtime-source.zip"))
     if len(archives) != 1:
         raise RuntimeError(f"Expected one corresponding-source ZIP; found {len(archives)}")
@@ -71,6 +109,8 @@ def run(version, artifact_root, output_root, run_id):
     archive_sha = sha256(archive)
     if archive.stat().st_size != source_info["bytes"] or archive_sha != source_info["sha256"]:
         raise RuntimeError("Downloaded source ZIP differs from the same-build report")
+    if archive.stat().st_size != SOURCE_ARCHIVE_BYTES or archive_sha != SOURCE_ARCHIVE_SHA256:
+        raise RuntimeError("Downloaded ZIP differs from the source archive locked to this artifact ID")
 
     if Path(output_root).exists():
         raise RuntimeError("Refusing to mix an existing staging-probe directory")
@@ -86,7 +126,9 @@ def run(version, artifact_root, output_root, run_id):
     (assets / report_name).write_text(json.dumps({
         "version": version,
         "runtime_source_archive": report_info,
-        "probe_evidence": {"run_id": run_id, "source_report": source_report_path.name},
+        "probe_evidence": {"run_id": run_id, "source_report": str(source_report_path),
+                           "artifact_id": artifact_id, "source_evidence": source_evidence,
+                           "stage_input_is_runner_only_fixture": True},
     }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     placeholder_names = release_assets.installers(tag)
@@ -135,7 +177,8 @@ def run(version, artifact_root, output_root, run_id):
         "real_windows_installer": real_windows,
         "first_install_passed": package_report["first_install"]["passed"],
         "upgrade_passed": package_report["upgrade"]["passed"],
-        "source_report_file": source_report_path.name,
+        "source_report_file": source_report_path.name if isinstance(source_report_path, Path) else None,
+        "source_report_evidence": source_evidence,
         "source_archive": {"name": source_name, "bytes": archive.stat().st_size, "sha256": archive_sha},
         "staged_payload_names": sorted(expected_names),
         "placeholder_installer_names": sorted(placeholder_names),
@@ -155,6 +198,7 @@ if __name__ == "__main__":
     parser.add_argument("--version", default="0.3.23")
     parser.add_argument("--artifact-root", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
-    parser.add_argument("--run-id", type=int, default=43156159232)
+    parser.add_argument("--run-id", type=int, default=WINDOWS_RUN_ID)
+    parser.add_argument("--artifact-id", type=int, default=WINDOWS_ARTIFACT_ID)
     args = parser.parse_args()
-    run(args.version, args.artifact_root, args.output_root, args.run_id)
+    run(args.version, args.artifact_root, args.output_root, args.run_id, args.artifact_id)
