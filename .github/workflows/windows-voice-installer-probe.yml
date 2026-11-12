@@ -64,7 +64,8 @@ jobs:
           $modes = @(
             @{ name = "default"; output = "WoerTranslator-0.0.0-Windows-x64-Setup.exe"; args = @() },
             @{ name = "missing-runtime"; output = "WoerTranslator-MsvcRuntime-Missing-Probe.exe"; args = @("/DRequireMsvcRuntime=1", "/DProbeInstaller=1", "/DProbeForceMissingMsvcRuntime=1", "/DMsvcRuntimeMinimumMajor=14", "/DMsvcRuntimeMinimumMinor=44", "/DMsvcRuntimeMinimumBuild=35211", "/DMsvcRuntimeMinimumRevision=0") },
-            @{ name = "too-old-runtime"; output = "WoerTranslator-MsvcRuntime-TooOld-Probe.exe"; args = @("/DRequireMsvcRuntime=1", "/DProbeInstaller=1", "/DMsvcRuntimeMinimumMajor=99", "/DMsvcRuntimeMinimumMinor=0", "/DMsvcRuntimeMinimumBuild=0", "/DMsvcRuntimeMinimumRevision=0") }
+            @{ name = "too-old-runtime"; output = "WoerTranslator-MsvcRuntime-TooOld-Probe.exe"; args = @("/DRequireMsvcRuntime=1", "/DProbeInstaller=1", "/DMsvcRuntimeMinimumMajor=99", "/DMsvcRuntimeMinimumMinor=0", "/DMsvcRuntimeMinimumBuild=0", "/DMsvcRuntimeMinimumRevision=0") },
+            @{ name = "ready-runtime"; output = "WoerTranslator-MsvcRuntime-Ready-Probe.exe"; args = @("/DRequireMsvcRuntime=1", "/DProbeInstaller=1", "/DProbeReadyMsvcRuntime=1", "/DMsvcRuntimeMinimumMajor=0", "/DMsvcRuntimeMinimumMinor=0", "/DMsvcRuntimeMinimumBuild=0", "/DMsvcRuntimeMinimumRevision=0") }
           )
           foreach ($mode in $modes) {
             $compilerArgs = @($common) + @($mode.args) + @($iss)
@@ -77,6 +78,18 @@ jobs:
       - name: Verify bounded child-process timeout and cleanup
         shell: pwsh
         run: ./tests/run_windows_voice_installer_probe.ps1 -SelfTestProcessTimeout
+      - name: Run system-runtime prerequisite fixtures before Piper build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $output = Join-Path $env:RUNNER_TEMP "woer-inno-prerequisite-preflight"
+          $report = Join-Path $env:GITHUB_WORKSPACE "build/voice-package-review"
+          ./tests/run_windows_voice_installer_probe.ps1 `
+            -PrerequisiteOnly `
+            -MissingRuntimeSetup (Join-Path $output "WoerTranslator-MsvcRuntime-Missing-Probe.exe") `
+            -TooOldRuntimeSetup (Join-Path $output "WoerTranslator-MsvcRuntime-TooOld-Probe.exe") `
+            -ReadyRuntimeSetup (Join-Path $output "WoerTranslator-MsvcRuntime-Ready-Probe.exe") `
+            -ReportRoot $report
       - name: Read locked model license evidence
         shell: pwsh
         run: python scripts/preflight_voice_licenses.py --lock scripts/voice_runtime_lock.json --report build/voice-licensing/voice-license-preflight.json

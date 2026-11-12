@@ -2,7 +2,9 @@ param(
     [Parameter(Mandatory=$false)][string]$CandidateSetup = "",
     [Parameter(Mandatory=$false)][string]$MissingRuntimeSetup = "",
     [Parameter(Mandatory=$false)][string]$TooOldRuntimeSetup = "",
+    [Parameter(Mandatory=$false)][string]$ReadyRuntimeSetup = "",
     [Parameter(Mandatory=$false)][string]$MinimumRuntimeVersion = "",
+    [Parameter(Mandatory=$false)][switch]$PrerequisiteOnly,
     [Parameter(Mandatory=$false)][switch]$SelfTestProcessTimeout,
     [Parameter(Mandatory=$false)][string]$ReportRoot = "build/voice-package-review"
 )
@@ -17,6 +19,93 @@ $resolvedSetup = if ($CandidateSetup) { [IO.Path]::GetFullPath($CandidateSetup) 
 $resolvedReportRoot = [IO.Path]::GetFullPath($ReportRoot)
 New-Item -ItemType Directory -Path $testRoot,$resolvedReportRoot -Force | Out-Null
 $script:processEvents = @()
+
+Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public sealed class WoerProbeChildWindow {
+    public long Handle { get; set; }
+    public int ProcessId { get; set; }
+    public string ClassName { get; set; }
+    public string Text { get; set; }
+}
+
+public sealed class WoerProbeTopWindow {
+    public long Handle { get; set; }
+    public int ProcessId { get; set; }
+    public string ClassName { get; set; }
+    public string Text { get; set; }
+    public WoerProbeChildWindow[] Children { get; set; }
+}
+
+public static class WoerInstallerWindowProbe {
+    private delegate bool EnumWindowsCallback(IntPtr hwnd, IntPtr lParam);
+    private static int[] targetPids;
+    private static List<WoerProbeTopWindow> windows;
+
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsCallback callback, IntPtr lParam);
+    [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr parent, EnumWindowsCallback callback, IntPtr lParam);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int maxCount);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder className, int maxCount);
+    [DllImport("user32.dll", SetLastError=true)] private static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
+
+    private static string ReadText(IntPtr hwnd) {
+        StringBuilder text = new StringBuilder(2048);
+        GetWindowText(hwnd, text, text.Capacity);
+        return text.ToString();
+    }
+
+    private static string ReadClass(IntPtr hwnd) {
+        StringBuilder name = new StringBuilder(256);
+        GetClassName(hwnd, name, name.Capacity);
+        return name.ToString();
+    }
+
+    private static bool IsTarget(int processId) {
+        foreach (int target in targetPids) if (target == processId) return true;
+        return false;
+    }
+
+    public static WoerProbeTopWindow[] GetVisibleWindows(int[] processIds) {
+        targetPids = processIds ?? new int[0];
+        windows = new List<WoerProbeTopWindow>();
+        EnumWindows(delegate(IntPtr hwnd, IntPtr lParam) {
+            uint pid;
+            GetWindowThreadProcessId(hwnd, out pid);
+            if (!IsTarget((int)pid) || !IsWindowVisible(hwnd)) return true;
+            List<WoerProbeChildWindow> children = new List<WoerProbeChildWindow>();
+            EnumChildWindows(hwnd, delegate(IntPtr child, IntPtr childParam) {
+                uint childPid;
+                GetWindowThreadProcessId(child, out childPid);
+                children.Add(new WoerProbeChildWindow {
+                    Handle = child.ToInt64(), ProcessId = (int)childPid,
+                    ClassName = ReadClass(child), Text = ReadText(child)
+                });
+                return true;
+            }, IntPtr.Zero);
+            windows.Add(new WoerProbeTopWindow {
+                Handle = hwnd.ToInt64(), ProcessId = (int)pid,
+                ClassName = ReadClass(hwnd), Text = ReadText(hwnd), Children = children.ToArray()
+            });
+            return true;
+        }, IntPtr.Zero);
+        return windows.ToArray();
+    }
+
+    public static bool ClickButton(long buttonHandle, uint timeoutMilliseconds, out int lastError) {
+        IntPtr result;
+        IntPtr sent = SendMessageTimeout(new IntPtr(buttonHandle), 0x00F5, IntPtr.Zero, IntPtr.Zero,
+            0x0001 | 0x0002, timeoutMilliseconds, out result);
+        lastError = Marshal.GetLastWin32Error();
+        return sent != IntPtr.Zero;
+    }
+}
+'@
 
 function Get-Sha256([string]$Path) {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -347,8 +436,61 @@ function Invoke-BoundedProcess([string]$Name, [string]$FilePath, [string[]]$Argu
     return [pscustomobject]@{ process = $process; event = $event; timed_out = $timedOut }
 }
 
+function Get-TestProcessTreeIds([int]$RootPid) {
+    $processes = @(Get-CimInstance -ClassName Win32_Process -ErrorAction Stop)
+    $ids = [System.Collections.Generic.HashSet[int]]::new()
+    [void]$ids.Add($RootPid)
+    $changed = $true
+    while ($changed) {
+        $changed = $false
+        foreach ($item in $processes) {
+            $candidatePid = [int]$item.ProcessId
+            if ($ids.Contains([int]$item.ParentProcessId) -and $ids.Add($candidatePid)) { $changed = $true }
+        }
+    }
+    return [int[]]@($ids)
+}
+
+function Get-InnoWindowSnapshot([int]$RootPid) {
+    $processIds = @(Get-TestProcessTreeIds $RootPid)
+    $nativeWindows = @([WoerInstallerWindowProbe]::GetVisibleWindows([int[]]$processIds))
+    $windowRecords = @()
+    $matchingDialogs = @()
+    foreach ($window in $nativeWindows) {
+        $children = @($window.Children | ForEach-Object {
+            [ordered]@{ handle = $_.Handle; pid = $_.ProcessId; class = $_.ClassName; text = $_.Text }
+        })
+        $record = [ordered]@{
+            handle = $window.Handle; pid = $window.ProcessId; class = $window.ClassName
+            title = $window.Text; children = $children
+        }
+        $windowRecords += $record
+        $body = (@($window.Text) + @($window.Children | ForEach-Object { $_.Text })) -join "`n"
+        $hasRuntimePrompt = $body -match '(?is)Microsoft Visual C\+\+ x64.{0,80}运行库|需要已安装.{0,100}Microsoft Visual C\+\+ x64'
+        $hasMicrosoftUrl = $body -match '(?i)https://learn\.microsoft\.com/en-us/cpp/windows/latest-supported-vc-redist\?view=msvc-170'
+        if ($window.ClassName -eq '#32770' -and $hasRuntimePrompt -and $hasMicrosoftUrl) {
+            $buttons = @($window.Children | Where-Object {
+                $_.ClassName -match '(?i)^Button$' -and $_.Text.Trim().TrimStart('&') -match '^(?i:OK|确定)$'
+            })
+            foreach ($button in $buttons) {
+                $matchingDialogs += [ordered]@{
+                    handle = $window.Handle; pid = $window.ProcessId; class = $window.ClassName
+                    title = $window.Text; body = $body; button_handle = $button.Handle; button_text = $button.Text
+                }
+            }
+            if ($buttons.Count -eq 0) {
+                $matchingDialogs += [ordered]@{
+                    handle = $window.Handle; pid = $window.ProcessId; class = $window.ClassName
+                    title = $window.Text; body = $body; button_handle = $null; button_text = $null
+                }
+            }
+        }
+    }
+    return [ordered]@{ process_ids = $processIds; windows = $windowRecords; matching_dialogs = $matchingDialogs }
+}
+
 function Assert-BlockedPrerequisiteSetup([string]$SetupPath, [string]$Label, [bool]$Interactive,
-    [string]$ExistingInstallRoot = "", [string]$ExpectedExistingExeSha256 = "") {
+    [string]$ExistingInstallRoot = "", [string]$ExpectedExistingExeSha256 = "", [string]$ExpectedRequiredVersion = "") {
     if (-not (Test-Path -LiteralPath $SetupPath -PathType Leaf)) { throw "Prerequisite fixture installer is missing: $SetupPath" }
     $destination = if ($ExistingInstallRoot) { [IO.Path]::GetFullPath($ExistingInstallRoot) } else { Join-Path $testRoot "$Label-install" }
     $existingExe = Join-Path $destination "WoerTranslator.exe"
@@ -363,28 +505,66 @@ function Assert-BlockedPrerequisiteSetup([string]$SetupPath, [string]$Label, [bo
     $installer = Start-Process -FilePath $SetupPath -ArgumentList $arguments -PassThru
     Write-ProcessEvent ([ordered]@{ stage = $Label; event = "start"; installer = $SetupPath; pid = $installer.Id; started_utc = $started.ToString("o"); timeout_seconds = 30 })
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
-    $sentEnter = $false
+    $windowSnapshot = [ordered]@{ process_ids = @($installer.Id); windows = @(); matching_dialogs = @() }
+    $clickEvidence = $null
+    $clickAttempted = $false
     while (-not $installer.HasExited -and [DateTime]::UtcNow -lt $deadline) {
         $installer.Refresh()
-        if ($Interactive -and -not $sentEnter -and $installer.MainWindowHandle -ne [IntPtr]::Zero) {
-            $shell = New-Object -ComObject WScript.Shell
-            [void]$shell.AppActivate($installer.Id)
-            Add-Type -AssemblyName System.Windows.Forms
-            [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
-            $sentEnter = $true
+        if ($Interactive) {
+            $windowSnapshot = Get-InnoWindowSnapshot $installer.Id
+            if (-not $clickAttempted) {
+                foreach ($dialog in $windowSnapshot.matching_dialogs) {
+                    if ($null -eq $dialog.button_handle) { continue }
+                    $lastError = 0
+                    $clickSucceeded = [WoerInstallerWindowProbe]::ClickButton([long]$dialog.button_handle, [uint32]1500, [ref]$lastError)
+                    $clickAttempted = $true
+                    $clickEvidence = [ordered]@{
+                        dialog_handle = $dialog.handle; process_id = $dialog.pid; class = $dialog.class
+                        title = $dialog.title; body = $dialog.body; button_handle = $dialog.button_handle
+                        button_text = $dialog.button_text; message = "BM_CLICK"; timeout_ms = 1500
+                        succeeded = $clickSucceeded; last_error = $lastError
+                    }
+                    Write-ProcessEvent ([ordered]@{ stage = $Label; event = "dialog-click"; evidence = $clickEvidence })
+                    break
+                }
+            }
         }
         Start-Sleep -Milliseconds 250
     }
     if (-not $installer.HasExited) {
         $treeTerminated = Stop-TestProcessTree $installer.Id
-        [void]$installer.WaitForExit(10000)
-        $failure = [ordered]@{ stage = $Label; installer = $SetupPath; pid = $installer.Id; started_utc = $started.ToString("o"); ended_utc = [DateTime]::UtcNow.ToString("o"); timeout_seconds = 30; timed_out = $true; tree_terminated = $treeTerminated; inno_log_path = $log }
+        $stopped = $installer.WaitForExit(10000)
+        $installer.Refresh()
+        $logTail = if (Test-Path -LiteralPath $log -PathType Leaf) { (Get-Content -LiteralPath $log -Tail 50) -join "`n" } else { "<Inno log was not created>" }
+        $failure = [ordered]@{
+            stage = $Label; installer = $SetupPath; arguments = $arguments; pid = $installer.Id
+            started_utc = $started.ToString("o"); ended_utc = [DateTime]::UtcNow.ToString("o")
+            timeout_seconds = 30; timed_out = $true; tree_terminated = $treeTerminated; process_stopped = $stopped
+            interactive = $Interactive; user_interactive = [Environment]::UserInteractive; session_name = $env:SESSIONNAME
+            window_snapshot = $windowSnapshot; target_dialog_click = $clickEvidence
+            inno_log_path = $log; inno_log_tail = $logTail
+        }
         Write-ProcessEvent $failure
         Write-Json (Join-Path $resolvedReportRoot "$Label-timeout-failure.json") $failure
         throw "$Label prerequisite installer did not exit after the blocking check"
     }
-    Write-ProcessEvent ([ordered]@{ stage = $Label; installer = $SetupPath; pid = $installer.Id; started_utc = $started.ToString("o"); ended_utc = [DateTime]::UtcNow.ToString("o"); timeout_seconds = 30; timed_out = $false; exit_code = $installer.ExitCode; interactive = $Interactive })
+    $installer.Refresh()
+    Write-ProcessEvent ([ordered]@{
+        stage = $Label; installer = $SetupPath; arguments = $arguments; pid = $installer.Id
+        started_utc = $started.ToString("o"); ended_utc = [DateTime]::UtcNow.ToString("o")
+        timeout_seconds = 30; timed_out = $false; exit_code = $installer.ExitCode; interactive = $Interactive
+        process_ids = $windowSnapshot.process_ids; window_snapshot = $windowSnapshot; target_dialog_click = $clickEvidence
+    })
     if ($installer.ExitCode -eq 0) { throw "$Label prerequisite installer unexpectedly succeeded" }
+    if ($Interactive -and (-not $clickEvidence -or -not $clickEvidence.succeeded)) {
+        $failure = [ordered]@{
+            stage = $Label; process_ids = $windowSnapshot.process_ids; user_interactive = [Environment]::UserInteractive
+            session_name = $env:SESSIONNAME; window_snapshot = $windowSnapshot; target_dialog_click = $clickEvidence
+            exit_code = $installer.ExitCode; inno_log_path = $log
+        }
+        Write-Json (Join-Path $resolvedReportRoot "$Label-dialog-mismatch.json") $failure
+        throw "$Label setup exited without a verified click on the expected x64 runtime message dialog"
+    }
     if ($ExpectedExistingExeSha256) {
         if (-not (Test-Path -LiteralPath $existingExe -PathType Leaf) -or (Get-Sha256 $existingExe) -ne $beforeExeHash) {
             throw "$Label prerequisite installer changed the existing application before blocking"
@@ -394,10 +574,16 @@ function Assert-BlockedPrerequisiteSetup([string]$SetupPath, [string]$Label, [bo
     }
     $logText = if (Test-Path -LiteralPath $log -PathType Leaf) { Get-Content -LiteralPath $log -Raw } else { "" }
     if ($logText -notmatch "MSVC x64 prerequisite failed") { throw "$Label installer log did not record the CRT prerequisite block" }
+    if ($ExpectedRequiredVersion) {
+        $requiredPattern = "MSVC x64 prerequisite failed\. Required=$([regex]::Escape($ExpectedRequiredVersion)); installed=.*; url=https://learn\.microsoft\.com/en-us/cpp/windows/latest-supported-vc-redist\?view=msvc-170"
+        if ($logText -notmatch $requiredPattern) { throw "$Label installer log did not record the expected runtime version and official URL" }
+    }
     return [ordered]@{
         blocked = $true; interactive = $Interactive; exit_code = $installer.ExitCode
         destination_created = (Test-Path -LiteralPath $destination)
-        inno_log = $log; message_logged = $true; enter_sent = $sentEnter
+        inno_log = $log; message_logged = $true; required_version = $ExpectedRequiredVersion; process_ids = $windowSnapshot.process_ids
+        window_snapshot = $windowSnapshot; target_dialog_click = $clickEvidence
+        existing_exe_sha256_unchanged = if ($ExpectedExistingExeSha256) { (Get-Sha256 $existingExe) -eq $beforeExeHash } else { $null }
     }
 }
 
@@ -408,10 +594,43 @@ if ($SelfTestProcessTimeout) {
     if (-not $timeoutProbe.timed_out -or -not $timeoutProbe.event.tree_terminated -or -not $timeoutProbe.event.process_stopped) {
         throw "Non-exiting process timeout fixture was not terminated as expected"
     }
+    $nativeWindows = @([WoerInstallerWindowProbe]::GetVisibleWindows([int[]]@($PID)))
     Write-Json (Join-Path $resolvedReportRoot "process-timeout-self-test.json") ([ordered]@{
         passed = $true; process = $timeoutProbe.event
+        window_helper = [ordered]@{ compiled = $true; enumerated_current_process = $true; visible_windows = $nativeWindows.Count }
     })
     Write-Output "Bounded child process timeout/cleanup fixture passed"
+    exit 0
+}
+
+if ($PrerequisiteOnly) {
+    if (-not $MissingRuntimeSetup -or -not $TooOldRuntimeSetup -or -not $ReadyRuntimeSetup) {
+        throw "PrerequisiteOnly requires interactive-missing, too-old, and ready fixture installers"
+    }
+    $interactiveMissing = Assert-BlockedPrerequisiteSetup $MissingRuntimeSetup "preflight-interactive-missing" $true "" "" "14.44.35211.0"
+    $sentinelRoot = Join-Path $testRoot "preflight-existing-install"
+    New-Item -ItemType Directory -Path $sentinelRoot -Force | Out-Null
+    $sentinelExe = Join-Path $sentinelRoot "WoerTranslator.exe"
+    [IO.File]::WriteAllBytes($sentinelExe, [Text.Encoding]::ASCII.GetBytes("preflight-existing-sentinel"))
+    $sentinelHash = Get-Sha256 $sentinelExe
+    $silentMissing = Assert-BlockedPrerequisiteSetup $MissingRuntimeSetup "preflight-silent-missing" $false $sentinelRoot $sentinelHash "14.44.35211.0"
+    $silentTooOld = Assert-BlockedPrerequisiteSetup $TooOldRuntimeSetup "preflight-silent-too-old" $false $sentinelRoot $sentinelHash "99.0.0.0"
+    if ((Get-Sha256 $sentinelExe) -ne $sentinelHash) { throw "Prerequisite fixtures changed the existing-install sentinel" }
+    $readyRoot = Join-Path $testRoot "preflight-ready-install"
+    $readyArgs = @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", "/DIR=`"$readyRoot`"")
+    $readyRun = Invoke-BoundedProcess -Name "preflight-ready-runtime" -FilePath $ReadyRuntimeSetup -Arguments $readyArgs -TimeoutSeconds 180
+    if ($readyRun.process.ExitCode -ne 0) { throw "Compatible system-runtime fixture failed to install: $($readyRun.process.ExitCode)" }
+    $payload = Join-Path $readyRoot "probe-placeholder.bin"
+    if (-not (Test-Path -LiteralPath $payload -PathType Leaf)) { throw "Compatible system-runtime fixture exited successfully without installing its dummy payload" }
+    $preflightReport = [ordered]@{
+        passed = $true; dummy_payload_only = $true
+        interactive_missing = $interactiveMissing; silent_missing = $silentMissing; silent_too_old = $silentTooOld
+        ready_install = [ordered]@{ exit_code = $readyRun.process.ExitCode; payload = $payload; bytes = (Get-Item -LiteralPath $payload).Length; sha256 = Get-Sha256 $payload }
+        sentinel_sha256 = $sentinelHash; sentinel_unchanged = ((Get-Sha256 $sentinelExe) -eq $sentinelHash)
+        interactive_environment = [ordered]@{ user_interactive = [Environment]::UserInteractive; session_name = $env:SESSIONNAME }
+    }
+    Write-Json (Join-Path $resolvedReportRoot "runtime-prerequisite-preflight.json") $preflightReport
+    Write-Output (ConvertTo-Json $preflightReport -Depth 12)
     exit 0
 }
 
@@ -426,7 +645,7 @@ $candidateHash = Get-Sha256 $resolvedSetup
 $candidateRoot = Join-Path (Split-Path -Parent $resolvedSetup) "..\dist\WoerTranslator"
 $candidateCrt = Get-CrtRecords ([IO.Path]::GetFullPath($candidateRoot))
 if ($candidateCrt.Count -gt 0) { throw "Candidate PyInstaller tree still contains MSVC CRT copies: $($candidateCrt.path -join ', ')" }
-$missingPrerequisite = Assert-BlockedPrerequisiteSetup $MissingRuntimeSetup "missing-runtime" $true
+$missingPrerequisite = Assert-BlockedPrerequisiteSetup $MissingRuntimeSetup "missing-runtime" $true "" "" $MinimumRuntimeVersion
 
 $appRoot = Join-Path $testRoot "安装 Space\Programs\WoerTranslator"
 $firstData = Join-Path $testRoot "first-local-app-data"
@@ -474,7 +693,7 @@ Install-Setup $oldInstaller $appRoot
 $oldCrt = Get-CrtRecords $appRoot
 $oldAppExe = Join-Path $appRoot "WoerTranslator.exe"
 $oldAppHash = Get-Sha256 $oldAppExe
-$tooOldPrerequisite = Assert-BlockedPrerequisiteSetup $TooOldRuntimeSetup "too-old-runtime" $false $appRoot $oldAppHash
+$tooOldPrerequisite = Assert-BlockedPrerequisiteSetup $TooOldRuntimeSetup "too-old-runtime" $false $appRoot $oldAppHash "99.0.0.0"
 $userRoot = Join-Path $upgradeData "QingCi"
 New-Item -ItemType Directory -Path $userRoot -Force | Out-Null
 $preferences = Join-Path $userRoot "preferences.json"

@@ -17,7 +17,11 @@
   #ifdef ProbeForceMissingMsvcRuntime
     #define InstallerOutputName "WoerTranslator-MsvcRuntime-Missing-Probe"
   #else
-    #define InstallerOutputName "WoerTranslator-MsvcRuntime-TooOld-Probe"
+    #ifdef ProbeReadyMsvcRuntime
+      #define InstallerOutputName "WoerTranslator-MsvcRuntime-Ready-Probe"
+    #else
+      #define InstallerOutputName "WoerTranslator-MsvcRuntime-TooOld-Probe"
+    #endif
   #endif
 #else
   #define InstallerOutputName "WoerTranslator-" + AppVersion + "-Windows-x64-Setup"
@@ -112,6 +116,7 @@ begin
   Result := True;
 #ifdef RequireMsvcRuntime
   RequiredVersion := '{#MsvcRuntimeMinimumMajor}.{#MsvcRuntimeMinimumMinor}.{#MsvcRuntimeMinimumBuild}.{#MsvcRuntimeMinimumRevision}';
+  InstalledVersion := 'not installed';
 #ifdef ProbeForceMissingMsvcRuntime
   Ready := False;
 #else
