@@ -65,6 +65,7 @@ Name: "{autodesktop}\沃尔翻译官"; Filename: "{app}\WoerTranslator.exe"; Tas
 [Run]
 Filename: "{app}\WoerTranslator.exe"; Description: "Open Woer Translator"; Flags: nowait postinstall skipifsilent unchecked
 [Code]
+#ifdef RequireMsvcRuntime
 const
   MsvcRuntimeRegistryKey = 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64';
   MsvcRuntimeDownloadUrl = 'https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170';
@@ -85,21 +86,21 @@ var
 begin
   Result := False;
   InstalledVersion := 'not installed';
-  SetRegView(64);
-  if not RegQueryDWordValue(HKLM, MsvcRuntimeRegistryKey, 'Installed', Installed) then
+  if not RegQueryDWordValue(HKEY_LOCAL_MACHINE_64, MsvcRuntimeRegistryKey, 'Installed', Installed) then
     Exit;
   if Installed <> 1 then
     Exit;
-  if not RegQueryDWordValue(HKLM, MsvcRuntimeRegistryKey, 'Major', Major) then Exit;
-  if not RegQueryDWordValue(HKLM, MsvcRuntimeRegistryKey, 'Minor', Minor) then Exit;
-  if not RegQueryDWordValue(HKLM, MsvcRuntimeRegistryKey, 'Bld', Build) then Exit;
-  if not RegQueryDWordValue(HKLM, MsvcRuntimeRegistryKey, 'Rbld', Revision) then Exit;
-  RegQueryStringValue(HKLM, MsvcRuntimeRegistryKey, 'Version', InstalledVersion);
+  if not RegQueryDWordValue(HKEY_LOCAL_MACHINE_64, MsvcRuntimeRegistryKey, 'Major', Major) then Exit;
+  if not RegQueryDWordValue(HKEY_LOCAL_MACHINE_64, MsvcRuntimeRegistryKey, 'Minor', Minor) then Exit;
+  if not RegQueryDWordValue(HKEY_LOCAL_MACHINE_64, MsvcRuntimeRegistryKey, 'Bld', Build) then Exit;
+  if not RegQueryDWordValue(HKEY_LOCAL_MACHINE_64, MsvcRuntimeRegistryKey, 'Rbld', Revision) then Exit;
+  RegQueryStringValue(HKEY_LOCAL_MACHINE_64, MsvcRuntimeRegistryKey, 'Version', InstalledVersion);
   if not FileExists(ExpandConstant('{sys}\VCRUNTIME140.dll')) then Exit;
   if not FileExists(ExpandConstant('{sys}\VCRUNTIME140_1.dll')) then Exit;
   if not FileExists(ExpandConstant('{sys}\MSVCP140.dll')) then Exit;
   Result := VersionAtLeast(Major, Minor, Build, Revision);
 end;
+#endif
 
 function InitializeSetup(): Boolean;
 var
