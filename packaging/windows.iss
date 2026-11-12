@@ -1,15 +1,6 @@
 #ifndef AppVersion
   #define AppVersion "0.2.0"
 #endif
-#ifndef RequireMsvcRuntime
-  #define RequireMsvcRuntime 0
-#endif
-#ifndef ProbeInstaller
-  #define ProbeInstaller 0
-#endif
-#ifndef ProbeForceMissingMsvcRuntime
-  #define ProbeForceMissingMsvcRuntime 0
-#endif
 #ifndef MsvcRuntimeMinimumMajor
   #define MsvcRuntimeMinimumMajor 0
 #endif
@@ -22,8 +13,8 @@
 #ifndef MsvcRuntimeMinimumRevision
   #define MsvcRuntimeMinimumRevision 0
 #endif
-#if ProbeInstaller == 1
-  #if ProbeForceMissingMsvcRuntime == 1
+#ifdef ProbeInstaller
+  #ifdef ProbeForceMissingMsvcRuntime
     #define InstallerOutputName "WoerTranslator-MsvcRuntime-Missing-Probe"
   #else
     #define InstallerOutputName "WoerTranslator-MsvcRuntime-TooOld-Probe"
@@ -53,7 +44,7 @@ LicenseFile=..\LICENSE
 InfoBeforeFile=..\packaging\INSTALL-NOTICE.txt
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
-#if RequireMsvcRuntime == 1
+#ifdef RequireMsvcRuntime
 [InstallDelete]
 ; Remove only this application's previously bundled copies before installing
 ; the system-CRT build. These paths are confined to {app}; never touch Windows.
@@ -118,9 +109,9 @@ var
   MessageText: String;
 begin
   Result := True;
-#if RequireMsvcRuntime == 1
+#ifdef RequireMsvcRuntime
   RequiredVersion := '{#MsvcRuntimeMinimumMajor}.{#MsvcRuntimeMinimumMinor}.{#MsvcRuntimeMinimumBuild}.{#MsvcRuntimeMinimumRevision}';
-#if ProbeForceMissingMsvcRuntime == 1
+#ifdef ProbeForceMissingMsvcRuntime
   Ready := False;
 #else
   Ready := SystemMsvcRuntimeReady(InstalledVersion);

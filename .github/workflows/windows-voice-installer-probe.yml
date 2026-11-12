@@ -48,6 +48,30 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Run repository unit tests
         run: python -m unittest discover -s tests -p "test_*.py"
+      - name: Compile Inno prerequisite modes against a disposable tree
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $dummyDist = Join-Path $env:GITHUB_WORKSPACE "dist/WoerTranslator"
+          New-Item -ItemType Directory -Path $dummyDist -Force | Out-Null
+          [IO.File]::WriteAllBytes((Join-Path $dummyDist "probe-placeholder.bin"), [byte[]](0))
+          $compiler = Join-Path ([Environment]::GetEnvironmentVariable("ProgramFiles(x86)")) "Inno Setup 6/ISCC.exe"
+          if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) { throw "Inno Setup compiler is missing: $compiler" }
+          $output = Join-Path $env:RUNNER_TEMP "woer-inno-prerequisite-preflight"
+          New-Item -ItemType Directory -Path $output -Force | Out-Null
+          $iss = Join-Path $env:GITHUB_WORKSPACE "packaging/windows.iss"
+          $common = @("/DAppVersion=0.0.0", "/O$output")
+          $modes = @(
+            @{ name = "default"; args = @() },
+            @{ name = "missing-runtime"; args = @("/DRequireMsvcRuntime=1", "/DProbeInstaller=1", "/DProbeForceMissingMsvcRuntime=1", "/DMsvcRuntimeMinimumMajor=14", "/DMsvcRuntimeMinimumMinor=44", "/DMsvcRuntimeMinimumBuild=35211", "/DMsvcRuntimeMinimumRevision=0") },
+            @{ name = "too-old-runtime"; args = @("/DRequireMsvcRuntime=1", "/DProbeInstaller=1", "/DMsvcRuntimeMinimumMajor=99", "/DMsvcRuntimeMinimumMinor=0", "/DMsvcRuntimeMinimumBuild=0", "/DMsvcRuntimeMinimumRevision=0") }
+          )
+          foreach ($mode in $modes) {
+            $compilerArgs = @($common) + @($mode.args) + @($iss)
+            & $compiler @compilerArgs
+            if ($LASTEXITCODE -ne 0) { throw "Inno preflight '$($mode.name)' compilation failed: $LASTEXITCODE" }
+            Write-Host "Inno preflight '$($mode.name)' compilation passed"
+          }
       - name: Read locked model license evidence
         shell: pwsh
         run: python scripts/preflight_voice_licenses.py --lock scripts/voice_runtime_lock.json --report build/voice-licensing/voice-license-preflight.json

@@ -77,7 +77,7 @@ $missingArgs = $fixtureCommon + @("/DProbeForceMissingMsvcRuntime=1", $iss)
 & $compiler @missingArgs
 if ($LASTEXITCODE -ne 0) { throw "Inno missing-CRT fixture compile failed: $LASTEXITCODE" }
 $oldArgs = @("/DAppVersion=$version", "/DRequireMsvcRuntime=1", "/DProbeInstaller=1",
-    "/DProbeForceMissingMsvcRuntime=0", "/DMsvcRuntimeMinimumMajor=99", "/DMsvcRuntimeMinimumMinor=0",
+    "/DMsvcRuntimeMinimumMajor=99", "/DMsvcRuntimeMinimumMinor=0",
     "/DMsvcRuntimeMinimumBuild=0", "/DMsvcRuntimeMinimumRevision=0", $iss)
 & $compiler @oldArgs
 if ($LASTEXITCODE -ne 0) { throw "Inno too-old-CRT fixture compile failed: $LASTEXITCODE" }
